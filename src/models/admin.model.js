@@ -1,4 +1,6 @@
-import mongoose, { mongo } from "mongoose";
+import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 const AdminSchema = new mongoose.Schema({
     name: {
@@ -19,12 +21,54 @@ const AdminSchema = new mongoose.Schema({
         enum: ["admin"],
         default: "admin"
     },
+    emailOTP: {
+        type: String
+    },
+    OTPExpiry: {
+        type: Date
+    },
     gymLogoUrl:{
         type: String
+    },
+    refreshToken: {
+        type: String
     }
-},
-{
+}, {
     timestamps: true
-})
+});
 
-export const Admin = mongoose.model("Admin", AdminSchema)
+/* ---------- Pre-save hook for password hashing ---------- */
+AdminSchema.pre("save", async function(next) {
+    if (!this.isModified("password")) return next();
+    try {
+        this.password = await bcrypt.hash(this.password, 10);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+/* ---------- Compare password ---------- */
+AdminSchema.methods.isPasswordCorrect = async function(password) {
+    return await bcrypt.compare(password, this.password);
+};
+
+/* ---------- Generate Access Token ---------- */
+AdminSchema.methods.generateAccessToken = function() {
+    return jwt.sign(
+        { _id: this._id, role: this.role },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
+    );
+};
+
+/* ---------- Generate Refresh Token ---------- */
+AdminSchema.methods.generateRefreshToken = function() {
+    return jwt.sign(
+        { _id: this._id, role: this.role },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
+    );
+};
+
+export const Admin = mongoose.model("Admin", AdminSchema);

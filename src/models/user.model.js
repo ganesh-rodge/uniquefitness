@@ -1,15 +1,11 @@
 import mongoose from "mongoose";
-
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 const userSchema = new mongoose.Schema({
-    fullNmae: {
+    fullName: {
         type: String, 
         required: true
-    },
-    mobileNumber:{
-        type: String,
-        required: true,
-        unique: true
     },
     email:{
         type: String,
@@ -24,15 +20,7 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    isPhoneVerified:{
-        type: Boolean,
-        default: false
-    },
-
     emailOTP: {
-        type: String
-    },
-    phoneOTP: {
         type: String
     },
     OTPExpiry:{
@@ -59,8 +47,6 @@ const userSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
-
-
     aadhaarPhotoUrl:{
         type: String,
         required: true
@@ -69,8 +55,6 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    
-
     membership:{
         planId:{
             type: mongoose.Schema.Types.ObjectId,
@@ -88,26 +72,23 @@ const userSchema = new mongoose.Schema({
             default: 'inactive'
         }
     },
-
-    
     customWorkoutSchedule : [
         {
             day: {
                 type: String,
-                required: String
+                required: true
             },
             workouts:[
                 {
                     workoutId: {
                         type: mongoose.Schema.Types.ObjectId,
-                        ref: Workout,
+                        ref: "Workout",
                         required: true
                     }
                 }
             ]
         }
     ],
-
     weightHistory:[
         {
             date : {
@@ -119,55 +100,56 @@ const userSchema = new mongoose.Schema({
             }
         }
     ],
-
-
     role: {
         type: String,
         enum: ['member'],
         default: 'member'
+    },
+    refreshToken: {
+        type: String
     }
-},
-{
-    timestamps: true
-})
+}, { timestamps: true });
 
+// 🔹 Pre-save hook: hash password
 userSchema.pre("save", async function(next) {
-    if(!this.modified("password")) return next()
+    if(!this.isModified("password")) return next();
 
     try {
-        this.password = bcrypt.hash(this.password, 10)
-    
-        next()
+        this.password = await bcrypt.hash(this.password, 10);
+        next();
     } catch (error) {
-        console.log("Error hashing the passoword : ", error)
-        next(error)
+        console.log("Error hashing the password:", error);
+        next(error);
     }
-})
+});
 
-userSchema.methods.isPasswordCorrect = async function (password){
-    return await bcrypt.compare(password, this.password)
-}
+// 🔹 Compare password
+userSchema.methods.isPasswordCorrect = async function(password) {
+    return await bcrypt.compare(password, this.password);
+};
 
-userSchema.methods.generateAccessToken = function(){
+// 🔹 Generate Access Token
+userSchema.methods.generateAccessToken = function() {
     return jwt.sign(
         {
             _id: this._id,
             email: this.email,
-            fullname: this.fullname
+            fullName: this.fullName
         },
         process.env.ACCESS_TOKEN_SECRET,
-        {expiresIn: process.env.ACCESS_TOKEN_EXPIRY}
+        { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
     );
-}
+};
 
-userSchema.methods.generateAccessToken = async function(){
+// 🔹 Generate Refresh Token
+userSchema.methods.generateRefreshToken = function() {
     return jwt.sign(
         {
             _id: this._id
         },
         process.env.REFRESH_TOKEN_SECRET,
-        {expiresIn: process.env.REFRESH_TOKEN_EXPIRY}
-    )
-}
+        { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
+    );
+};
 
-export const User = mongoose.model("User", userSchema)
+export const User = mongoose.model("User", userSchema);

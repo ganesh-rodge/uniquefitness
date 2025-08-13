@@ -36,6 +36,8 @@
     "express": "^5.1.0",
     "fs": "^0.0.1-security",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.17.1"
+    "mongoose": "^8.17.1",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.5"
   }
 }
