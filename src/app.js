@@ -19,10 +19,12 @@ app.use(
 import healthcheckRouter from './routes/healthcheck.route.js'
 import userRouter from './routes/user.route.js'
 import adminRouter from "./routes/admin.route.js"
+import announcementRouter from './routes/announcement.route.js'
 
 
 app.use("/api/v1/healthcheck", healthcheckRouter)
 app.use("/api/v1/user", userRouter)
 app.use("/api/v1/admin", adminRouter)
+app.use("/api/v1/announcement", announcementRouter)
 
 export default app
