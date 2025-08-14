@@ -1,33 +1,22 @@
 import mongoose from "mongoose";
 
-const workoutSchema = new mongoose.Schema({
-    name:{
-        type: String,
-        required: true
-    },
-    category: {
-        type: String,
-        enum: ['chest', 'back', 'legs', 'arms', 'shoulders', 'cardio', 'triceps', 'biceps'],
-        required: true
-    },
-    description: {
-        type: String
-    },
-    videoUrl: {
-        type: String,
-        required: true
-    },
-    thumbnailUrl:{
-        type: String
-    },
-    createdBy:{
+const userWorkoutScheduleSchema = new mongoose.Schema({
+    user: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Admin',
+        ref: "User",
         required: true
+    },
+    schedule: {
+        monday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }],
+        tuesday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }],
+        wednesday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }],
+        thursday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }],
+        friday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }],
+        saturday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }],
+        sunday: [{ type: String, enum: ['chest', 'triceps', 'shoulders', 'back', 'biceps', 'legs', 'arms', 'abs', 'full body', 'cardio'] }]
     }
-},
-{
+}, {
     timestamps: true
 });
 
-export const Workout = mongoose.model("Workout", workoutSchema)
+export const UserWorkoutSchedule = mongoose.model("UserWorkoutSchedule", userWorkoutScheduleSchema);

@@ -1,36 +1,34 @@
 import mongoose from "mongoose";
 
-const dietSchema = new mongoose.Schema({
-    category:{
+const dietPlanSchema = new mongoose.Schema({
+    title: {
         type: String,
-        enum: ['veg', 'non-veg', 'egg-only'],
         required: true
     },
-    items:[
-        {
-            name: {
-                type: String,
-                required: true
-            },
-            calories:{
-                type: Number
-            },
-            protein: {
-                type: Number
-            },
-            carbs: {
-                type: Number
-            },
-            fats: {
-                type: Number
-            }
-        }
-    ],
+    description: {
+        type: String,
+    },
+    calories: {
+        type: Number,
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Admin'
+        refPath: "creatorModel", // reference dynamic model (User or Admin)
+        required: true
+    },
+    creatorModel: {
+        type: String,
+        required: true,
+        enum: ["User", "Admin"] // can only be one of these
+    },
+    isDefault: {
+        type: Boolean,
+        default: false // admin plans: true, user plans: false
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
     }
-},
-{timestamps: true})
+});
 
-export const Diet = mongoose.model("Diet", dietSchema)
+export const DietPlan = mongoose.model("DietPlan", dietPlanSchema);

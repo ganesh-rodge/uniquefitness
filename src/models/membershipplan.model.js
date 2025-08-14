@@ -1,29 +1,12 @@
 import mongoose from "mongoose";
 
 const membershipPlanSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: String
-    },
-    price:{
-        type: Number,
-        required: String
-    },
-    durationDays:{
-        type: Number,
-        required: true
-    },
-    description:{
-        type: String
-    },
-    status:{
-        type: String,
-        enum: ['active', 'inactive'],
-        default: 'active'
-    }
-},
-{
-    timestamps: true
-})
+    name: { type: String, required: true, unique: true },
+    price: { type: Number, required: true },
+    duration: { type: Number, required: true }, // in months
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    createdAt: { type: Date, default: Date.now }
+});
 
-export const MembershipPlan = mongoose.model("MembershipPlan", membershipPlanSchema)
+export const MembershipPlan = mongoose.models.MembershipPlan || mongoose.model("MembershipPlan", membershipPlanSchema);
