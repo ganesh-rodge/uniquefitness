@@ -404,7 +404,7 @@ const getWeightHistory = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, user.weightHistory, "Weight history fetched successfully"));
 });
 
-import { MembershipPlan } from "../models/membershipPlan.model.js";
+import { MembershipPlan } from "../models/membershipplan.model.js";
 
 const linkMembershipToUser = asyncHandler(async (req, res) => {
     const { planId } = req.body;
