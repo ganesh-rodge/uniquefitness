@@ -1,7 +1,7 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { Payment } from "../models/payment.model.js";
-import { MembershipPlan } from "../models/membershipPlan.model.js";
+import { MembershipPlan } from "../models/membershipplan.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
