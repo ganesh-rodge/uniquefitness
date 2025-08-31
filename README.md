@@ -247,6 +247,7 @@ CORS enabled for frontend integration
 ## 👨‍💻 Author
 # Ganesh Rodge
 💼 Developer | 🚀 Backend Engineer | 🧑‍💻 Tech Enthusiast
+
 📧 ganeshrodge25@gmail.com
 🔗 LinkedIn
 🔗 GitHub
