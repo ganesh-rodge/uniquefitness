@@ -107,6 +107,8 @@ EMAIL_PASS=your-app-password
 CLOUDINARY_CLOUD_NAME=your-cloud-name
 CLOUDINARY_API_KEY=your-cloudinary-key
 CLOUDINARY_API_SECRET=your-cloudinary-secret
+```
+
 ⚡ Getting Started
 1. Clone the Repository
 bash
