@@ -245,7 +245,7 @@ CORS enabled for frontend integration
 .env secrets not pushed (sample provided)
 
 ## 👨‍💻 Author
-Ganesh Rodge
+# Ganesh Rodge
 💼 Developer | 🚀 Backend Engineer | 🧑‍💻 Tech Enthusiast
 📧 ganeshrodge25@gmail.com
 🔗 LinkedIn
