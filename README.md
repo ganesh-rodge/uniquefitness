@@ -55,7 +55,6 @@ This repository contains the **backend (Node.js + Express + MongoDB)** APIs that
 
 ---
 
-## 📂 Project Structure
 
 ## 📂 Project Structure
 
