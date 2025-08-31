@@ -57,24 +57,27 @@ This repository contains the **backend (Node.js + Express + MongoDB)** APIs that
 
 ## 📂 Project Structure
 
+## 📂 Project Structure
+
+```plaintext
 backend/
 ├── src/
-│ ├── controllers/ # Route controllers (User, Admin, Membership, Payment, etc.)
-│ ├── middlewares/ # Authentication & error handling
-│ ├── models/ # Mongoose models (User, Admin, Membership, Workout, DietPlan, Announcement, Payment)
-│ ├── routes/ # API routes
-│ ├── utils/ # Utility functions (OTP, Cloudinary, JWT, ApiResponse, etc.)
-│ ├── app.js # Express app setup
-│ └── index.js # Server entry point
+│   ├── controllers/        # Route controllers (User, Admin, Membership, Payment, etc.)
+│   ├── middlewares/        # Authentication & error handling
+│   ├── models/             # Mongoose models (User, Admin, Membership, Workout, DietPlan, Announcement, Payment)
+│   ├── routes/             # API routes
+│   ├── utils/              # Utility functions (OTP, Cloudinary, JWT, ApiResponse, etc.)
+│   ├── app.js              # Express app setup
+│   └── index.js            # Server entry point
 │
-├── .env.sample # Example environment variables
-├── .gitignore # Git ignore file
-├── package.json # Project metadata & dependencies
-├── package-lock.json # Exact dependency tree
-└── README.md # Project documentation
+├── .env.sample             # Example environment variables
+├── .gitignore              # Git ignore file
+├── package.json            # Project metadata & dependencies
+├── package-lock.json       # Exact dependency tree
+└── README.md               # Project documentation
+
 
 makefile
-Copy code
 
 ---
 
