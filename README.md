@@ -136,7 +136,10 @@ Open Postman Documentation
 Import collection and test APIs
 
 #📌 API Overview
+
 User Routes (/api/v1/user)
+
+
 POST /send-otp – Send OTP for email verification
 
 POST /verify-otp – Verify OTP
