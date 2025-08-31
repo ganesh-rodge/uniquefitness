@@ -110,25 +110,26 @@ CLOUDINARY_API_SECRET=your-cloudinary-secret
 ```
 
 ⚡ Getting Started
+
 1. Clone the Repository
 bash
-Copy code
-git clone https://github.com/ganesh-rodge/unique-fitness-backend.git
-cd unique-fitness-backend
+git clone https://github.com/ganesh-rodge/uniquefitness.git
+cd uniquefitness
 2. Install Dependencies
 bash
-Copy code
+```
 npm install
+```
 3. Setup Environment
 Copy .env.sample to .env
 
 Add your credentials (MongoDB, JWT secrets, Razorpay keys, Email, Cloudinary)
 
 4. Run the Server
-bash
-Copy code
+```
 npm run dev   # Development with nodemon
 npm start     # Production
+```
 5. Test APIs
 Open Postman Documentation
 
