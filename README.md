@@ -109,7 +109,7 @@ CLOUDINARY_API_KEY=your-cloudinary-key
 CLOUDINARY_API_SECRET=your-cloudinary-secret
 ```
 
-⚡ Getting Started
+## ⚡ Getting Started
 
 1. Clone the Repository
 bash
@@ -135,7 +135,7 @@ Open Postman Documentation
 
 Import collection and test APIs
 
-#📌 API Overview
+## 📌 API Overview
 
 User Routes (/api/v1/user)
 
@@ -222,7 +222,7 @@ POST /verify – Verify payment and activate membership
 
 GET /history/:userId – Get user payment history
 
-📊 Reports & Analytics
+## 📊 Reports & Analytics
 Active Members Count
 
 Expiring Soon Members
@@ -233,7 +233,7 @@ Total Revenue
 
 Membership Distribution
 
-🛡️ Security
+## 🛡️ Security
 Passwords hashed with bcrypt
 
 JWT Authentication with Refresh Tokens
@@ -244,7 +244,7 @@ CORS enabled for frontend integration
 
 .env secrets not pushed (sample provided)
 
-👨‍💻 Author
+## 👨‍💻 Author
 Ganesh Rodge
 💼 Developer | 🚀 Backend Engineer | 🧑‍💻 Tech Enthusiast
 📧 ganeshrodge25@gmail.com
