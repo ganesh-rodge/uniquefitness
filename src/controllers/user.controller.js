@@ -215,7 +215,6 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   // Fetch user from DB using id from req.user (set in middleware)
   const user = await User.findById(req.user?._id).select("-password");
   
-  
 
   if (!user) {
     return res.status(404).json(new ApiResponse(404, null, "User not found"));
@@ -226,8 +225,6 @@ const getCurrentUser = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, user, "User information fetched successfully"));
 });
-
-
 
 
 const refreshAccessToken = asyncHandler(async (req, res)=>{
