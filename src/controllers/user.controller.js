@@ -82,12 +82,12 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const email = decoded.email;
 
-    const requiredFields = ["fullName", "password", "height", "weight", "gender", "dob", "address"];
+    const requiredFields = ["fullName", "password", "phone", "height", "weight", "gender", "dob", "address"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
     }
 
-    const { fullName, password, height, weight, gender, dob, address } = req.body;
+    const { fullName, password, phone, height, weight, gender, dob, address } = req.body;
 
 
     const aadhaarLocalPath = req.files?.aadhaarPhoto?.[0]?.path;
@@ -102,6 +102,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const user = await User.create({
         fullName,
         email,
+        phone,
         password,
         isEmailVerified: true,
         height,

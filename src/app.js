@@ -4,17 +4,29 @@ import cookieParser from 'cookie-parser'
 
 const app = express()
 
+const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || [];
+
 app.use(express.json({limit: "16kb"}))
 app.use(express.urlencoded({extended:true, limit:"16kb"}))
 app.use(express.static("public"))
 
 app.use(cookieParser())
+
 app.use(
-    cors({
-        origin: process.env.CORS_ORIGIN,
-        credentials: true
-    })
-)
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like Postman or server-to-server)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, origin); // 👈 return that single matching origin
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 
 import healthcheckRouter from './routes/healthcheck.route.js'
 import userRouter from './routes/user.route.js'
