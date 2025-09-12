@@ -213,7 +213,7 @@ const updateLivePhoto = asyncHandler(async (req, res)=>{
 
 const getCurrentUser = asyncHandler(async (req, res) => {
   // Fetch user from DB using id from req.user (set in middleware)
-  const user = await User.findById(req.user?._id).select("-password");
+  const user = await User.findById(req.user?._id).select("-password -refreshToken");
   
 
   if (!user) {
