@@ -15,16 +15,16 @@ app.use(cookieParser())
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like Postman or server-to-server)
+      // Allow requests with no origin (like Postman)
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
-        callback(null, origin); // 👈 return that single matching origin
+        callback(null, true); // ✅ allow the origin
       } else {
-        callback(new Error("Not allowed by CORS"));
+        callback(null, false); // ❌ reject the origin
       }
     },
-    credentials: true,
+    credentials: true, // allow cookies
   })
 );
 
