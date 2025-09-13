@@ -14,19 +14,12 @@ app.use(cookieParser())
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like Postman)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true); // ✅ allow the origin
-      } else {
-        callback(null, false); // ❌ reject the origin
-      }
-    },
-    credentials: true, // allow cookies
+    origin: "http://localhost:5173", // or your frontend domain
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+    credentials: true,
   })
 );
+
 
 import healthcheckRouter from './routes/healthcheck.route.js'
 import userRouter from './routes/user.route.js'
