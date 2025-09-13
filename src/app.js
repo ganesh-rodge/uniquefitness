@@ -14,7 +14,7 @@ app.use(cookieParser())
 
 app.use(
   cors({
-    origin: "http://localhost:5173", // or your frontend domain
+    origin: "*", // or your frontend domain
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
     credentials: true,
   })
