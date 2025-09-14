@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import {
   createOrder,
   verifyPayment,
@@ -8,14 +8,19 @@ import {
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/verifyAdmin.middleware.js";
 
-const router = Router();
+const router = express.Router();
 
-// User
+// Ensure all controllers exist
+if (!createOrder || !verifyPayment || !getUserPayments || !getAllPayments) {
+  throw new Error("One or more payment controller functions are missing or undefined");
+}
+
+// User routes
 router.post("/create-order", verifyJWT, createOrder);
 router.post("/verify", verifyJWT, verifyPayment);
 router.get("/my", verifyJWT, getUserPayments);
 
-// Admin
+// Admin route
 router.get("/", verifyJWT, verifyAdmin, getAllPayments);
 
 export default router;

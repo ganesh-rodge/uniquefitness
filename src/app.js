@@ -13,34 +13,26 @@ import paymentRouter from "./routes/payment.route.js";
 
 const app = express();
 
-// Allowed origins for CORS
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://uniquefitness.vercel.app"
-];
-
 // Middleware
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
 
-// Proper CORS configuration
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (like Postman)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
-    credentials: true,
-  })
-);
+// CORS setup
+const allowedOrigins = process.env.CORS_ORIGIN.split(','); // Array of allowed origins
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // Allow Postman, curl
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET","POST","PATCH","PUT","DELETE","OPTIONS"]
+}));
 
 // Routes
 app.use("/api/v1/healthcheck", healthcheckRouter);
