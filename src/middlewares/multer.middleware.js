@@ -1,15 +1,9 @@
 import multer from 'multer'
-import { v2 as cloudinary } from 'cloudinary';
 
-const storage = multer.diskStorage({
-    destination: function(req, file, cb){
-        cb(null, './public/temp')
-    },
-    filename: function(req, file, cb){
-        cb(null, file.originalname)
-    }
-})
+// Use memory storage to avoid writing to disk on ephemeral file systems
+const storage = multer.memoryStorage();
 
+// Export the multer instance with the new storage configuration
 export const upload = multer({
-    storage
-})
+    storage,
+});

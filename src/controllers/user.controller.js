@@ -90,14 +90,14 @@ const registerUser = asyncHandler(async (req, res) => {
     const { fullName, password, phone, height, weight, gender, dob, address } = req.body;
 
 
-    const aadhaarLocalPath = req.files?.aadhaarPhoto?.[0]?.path;
-    const livePhotoLocalPath = req.files?.livePhoto?.[0]?.path;
-    if (!aadhaarLocalPath || !livePhotoLocalPath) {
+    const aadhaarBuffer = req.files?.aadhaarPhoto?.[0]?.buffer;
+    const livePhotoBuffer = req.files?.livePhoto?.[0]?.buffer;
+    if (!aadhaarBuffer || !livePhotoBuffer) {
         throw new ApiError(400, "Both Aadhaar and Live photos are required");
     }
 
-    const aadhaarUpload = await uploadOnCloudinary(aadhaarLocalPath);
-    const livePhotoUpload = await uploadOnCloudinary(livePhotoLocalPath);
+    const aadhaarUpload = await uploadOnCloudinary(aadhaarBuffer);
+    const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
 
     const user = await User.create({
         fullName,
