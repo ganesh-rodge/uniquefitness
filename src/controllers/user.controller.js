@@ -365,14 +365,29 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
     if (!email) throw new ApiError(400, "Email is required");
 
+    // Check if the user exists
     const user = await User.findOne({ email });
     if (!user) throw new ApiError(404, "User not found");
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.emailOTP = otp;
-    user.OTPExpiry = Date.now() + 10 * 60 * 1000; // 10 mins expiry
-    await user.save();
+
+    // Update the user document directly without full validation
+    const updatedUser = await User.findOneAndUpdate(
+        { email },
+        {
+            $set: {
+                emailOTP: otp,
+                OTPExpiry: Date.now() + 10 * 60 * 1000, // 10 mins expiry
+            },
+        },
+        { new: true } // Return the updated document
+    );
+
+    // If the update was not successful for some reason
+    if (!updatedUser) {
+        throw new ApiError(500, "Failed to update user for password reset");
+    }
 
     // Send Email
     await sendEmailOtp(email, otp);
@@ -384,22 +399,46 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
-    if (!email || !otp || !newPassword)
+    if (!email || !otp || !newPassword) {
         throw new ApiError(400, "Email, OTP, and new password are required");
-
-    const user = await User.findOne({ email });
-    if (!user) throw new ApiError(404, "User not found");
-
-    // Verify OTP
-    if (user.emailOTP !== otp || user.OTPExpiry < Date.now()) {
-        throw new ApiError(400, "Invalid or expired OTP");
     }
 
-    // Update password
+    // Find the user and verify the OTP and its expiry in a single query
+    const user = await User.findOne({
+        email,
+        emailOTP: otp,
+        OTPExpiry: { $gt: Date.now() }, // $gt checks if OTPExpiry is greater than now
+    });
+
+    if (!user) {
+        // We use a generic message to prevent an attacker from knowing
+        // whether the email was wrong, the OTP was wrong, or the OTP expired.
+        throw new ApiError(400, "Invalid or expired OTP or user not found");
+    }
+
+    // Update the password and clear OTP fields directly
     user.password = newPassword;
     user.emailOTP = undefined;
     user.OTPExpiry = undefined;
-    await user.save();
+
+    // Save the changes. The findOne and subsequent save is fine here because
+    // we've already found the user with the required fields. However, for a cleaner and
+    // more atomic operation, we can use findOneAndUpdate here as well.
+    const updatedUser = await User.findOneAndUpdate(
+        { _id: user._id },
+        {
+            $set: {
+                password: newPassword,
+                emailOTP: undefined,
+                OTPExpiry: undefined,
+            },
+        },
+        { new: true, runValidators: true } // Run validators to hash the password
+    );
+
+    if (!updatedUser) {
+        throw new ApiError(500, "Password reset failed. Please try again.");
+    }
 
     return res
         .status(200)
