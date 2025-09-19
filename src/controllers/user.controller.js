@@ -187,29 +187,37 @@ const logoutUser = asyncHandler(async(req, res)=>{
     .json( new ApiResponse(200, {}, "User Logged Out SuccessFully"))
 })
 
-const updateLivePhoto = asyncHandler(async (req, res)=>{
-    const livePhotoLocalPath = req.file?.path
+const updateLivePhoto = asyncHandler(async (req, res) => {
+    const livePhotoBuffer = req.file?.buffer;
 
-    if(!livePhotoLocalPath) throw new ApiError(403, "File is missing")
+    if (!livePhotoBuffer) {
+        throw new ApiError(400, "Live photo file is missing");
+    }
 
-    const livePhoto = await uploadOnCloudinary(livePhotoLocalPath)
+    // Upload the buffer to Cloudinary
+    const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
 
-    if(!livePhoto.url) throw new ApiError(401, "Live Photo is missing !")
+    if (!livePhotoUpload?.url) {
+        throw new ApiError(500, "Failed to upload live photo");
+    }
 
-    await User.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
         req.user?._id,
-        {
-            $set:{
-                livePhoto: livePhoto.url
-            }
-        },
-        {new: true}
-    ). select("-password -refreshToken")
+        { $set: { livePhotoUrl: livePhotoUpload.url } },
+        { new: true }
+    ).select("-password -refreshToken");
 
     return res
-    .status(200)
-    .json(new ApiResponse(200,{}, "Live Photo updated succesfully !"))
-})
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                updatedUser,
+                "Live Photo updated successfully!"
+            )
+        );
+});
+
 
 const getCurrentUser = asyncHandler(async (req, res) => {
   // Fetch user from DB using id from req.user (set in middleware)
