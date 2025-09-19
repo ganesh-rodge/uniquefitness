@@ -5,7 +5,6 @@ import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 import jwt from "jsonwebtoken"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
-import bcrypt from 'bcrypt'
 
 let otpStore = {}
 
@@ -402,19 +401,11 @@ export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
-    // Verify OTP (assuming you already have OTP validation)
-    // ...
-
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // ✅ HASH the new password before saving
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
-
-    await user.save();
+    user.password = newPassword; // ✅ plain password, let pre-save hash
+    await user.save(); // will trigger pre('save') and hash correctly
 
     res.status(200).json({ message: "Password reset successfully" });
   } catch (error) {
