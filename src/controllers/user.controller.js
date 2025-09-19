@@ -397,22 +397,45 @@ const forgotPassword = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "OTP sent to your email for password reset"));
 });
 
-export const resetPassword = async (req, res) => {
-  try {
-    const { email, otp, newPassword } = req.body;
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, otp, newPassword } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    user.password = newPassword; // ✅ plain password, let pre-save hash
-    await user.save(); // will trigger pre('save') and hash correctly
-
-    res.status(200).json({ message: "Password reset successfully" });
-  } catch (error) {
-    console.error("Error resetting password:", error);
-    res.status(500).json({ message: "Server error" });
+  if (!email || !otp || !newPassword) {
+    throw new ApiError(400, "Email, OTP, and new password are required");
   }
-};
+
+  // 🔎 Find user (document, not plain object)
+  const user = await User.findOne({ email });
+  if (!user) throw new ApiError(404, "User not found");
+
+  // ✅ Verify OTP
+  if (!user.emailOTP || !user.OTPExpiry) {
+    throw new ApiError(400, "No OTP request found for this email");
+  }
+
+  if (Date.now() > user.OTPExpiry) {
+    throw new ApiError(400, "OTP expired");
+  }
+
+  if (user.emailOTP !== otp) {
+    throw new ApiError(400, "Invalid OTP");
+  }
+
+  // ✅ Assign new password (do NOT hash manually)
+  user.password = newPassword;
+  user.markModified("password");
+
+  // Clear OTP
+  user.emailOTP = undefined;
+  user.OTPExpiry = undefined;
+
+  // ✅ Call save() (triggers pre('save') hook)
+  await user.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password reset successfully"));
+});
 
 const getWeightHistory = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id).select("weightHistory");
