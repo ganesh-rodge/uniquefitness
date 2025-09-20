@@ -77,27 +77,22 @@ const userSchema = new mongoose.Schema({
             default: 'inactive'
         }
     },
-    customWorkoutSchedule: [
-  {
-    day: { type: String, required: true },
-    workouts: [
-      {
-        name: { type: String, required: true } // store workout names instead of ObjectId
-      }
-    ]
-  }
-],
-    weightHistory:[
-        {
-            date : {
-                type: Date,
-                default: Date.now
-            },
-            weight: {
-                type: Number
-            }
+    customWorkoutSchedule: {
+  type: Map,
+  of: [String],
+  default: {} // ensures new users start with empty object
+},
+weightHistory:[
+    {
+        date : {
+            type: Date,
+            default: Date.now
+        },
+        weight: {
+            type: Number
         }
-    ],
+    }
+],
     role: {
         type: String,
         enum: ['member'],
