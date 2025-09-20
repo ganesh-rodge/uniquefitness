@@ -309,34 +309,45 @@ const changeCurrentPassword = asyncHandler ( async (req, res)=>{
 })
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-    try {
-        console.log("REQ BODY:", req.body);
-        const { height, weight, address } = req.body; // not taking email
+  try {
+    console.log("REQ BODY:", req.body);
+    const { height, weight, address } = req.body;
 
-        // Build update object dynamically
-        const updateFields = {};
-        if (height) updateFields.height = height;
-        if (weight) updateFields.weight = weight;
-        if (address) updateFields.address = address;
+    // Build update object dynamically
+    const updateFields = {};
+    if (height) updateFields.height = height;
+    if (weight) updateFields.weight = weight;
+    if (address) updateFields.address = address;
 
-        if (Object.keys(updateFields).length === 0) {
-            throw new ApiError(400, "At least one valid field must be provided to update!");
-        }
-
-        const updatedUser = await User.findByIdAndUpdate(
-            req.user?._id,
-            { $set: updateFields },
-            { new: true }
-        ).select("-password -refreshToken");
-
-        return res
-            .status(200)
-            .json(new ApiResponse(200, updatedUser, "User Account Updated Successfully!"));
-    } catch (error) {
-        console.error("ERROR IN updateAccountDetails:", error.message);
-        res.status(500).json({ success: false, error: error.message });
+    if (Object.keys(updateFields).length === 0) {
+      throw new ApiError(400, "At least one valid field must be provided to update!");
     }
+
+    // Find the user first
+    const user = await User.findById(req.user?._id);
+    if (!user) throw new ApiError(404, "User not found");
+
+    // If weight is updated, push to weightHistory
+    if (weight && !isNaN(weight)) {
+      user.weightHistory.push({ date: new Date(), weight });
+    }
+
+    // Update other fields
+    if (height) user.height = height;
+    if (weight) user.weight = weight;
+    if (address) user.address = address;
+
+    await user.save();
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, user, "User Account Updated Successfully!"));
+  } catch (error) {
+    console.error("ERROR IN updateAccountDetails:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
+
 
 
 const updateWeight = asyncHandler(async (req, res) => {
