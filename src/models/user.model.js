@@ -77,23 +77,16 @@ const userSchema = new mongoose.Schema({
             default: 'inactive'
         }
     },
-    customWorkoutSchedule : [
-        {
-            day: {
-                type: String,
-                required: true
-            },
-            workouts:[
-                {
-                    workoutId: {
-                        type: mongoose.Schema.Types.ObjectId,
-                        ref: "Workout",
-                        required: true
-                    }
-                }
-            ]
-        }
-    ],
+    customWorkoutSchedule: [
+  {
+    day: { type: String, required: true },
+    workouts: [
+      {
+        name: { type: String, required: true } // store workout names instead of ObjectId
+      }
+    ]
+  }
+],
     weightHistory:[
         {
             date : {
