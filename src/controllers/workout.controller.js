@@ -70,18 +70,19 @@ const getUserSchedule = async (req, res, next) => {
 
         const scheduleDoc = await UserWorkoutSchedule.findOne({ user: userId });
         
+        // If a schedule document is not found, return an empty array.
+        // This is crucial to prevent the TypeError on the frontend.
         if (!scheduleDoc || !scheduleDoc.schedule) {
             return res.status(200).json(new ApiResponse(true, "No schedule found", []));
         }
 
         // The schedule is an object { monday: [...], tuesday: [...] }
-        // We need to transform it into an array for the frontend
+        // We need to transform it into an array for the frontend to use .forEach()
         const formattedSchedule = Object.entries(scheduleDoc.schedule).map(([day, workouts]) => ({
             day,
-            workouts: workouts.map(name => ({ name }))
+            workouts: workouts
         }));
-        
-        // This is the data that the frontend expects
+
         res.status(200).json(new ApiResponse(true, "User schedule fetched", formattedSchedule));
 
     } catch (error) {
