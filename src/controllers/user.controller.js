@@ -311,15 +311,21 @@ const changeCurrentPassword = asyncHandler ( async (req, res)=>{
 const updateAccountDetails = asyncHandler(async (req, res) => {
     try {
         console.log("REQ BODY:", req.body);
-        const { height, weight, address } = req.body; // removed email
+        const { height, weight, address } = req.body; // not taking email
 
-        if (!height || !weight || !address) {
-            throw new ApiError(400, "All fields are required!");
+        // Build update object dynamically
+        const updateFields = {};
+        if (height) updateFields.height = height;
+        if (weight) updateFields.weight = weight;
+        if (address) updateFields.address = address;
+
+        if (Object.keys(updateFields).length === 0) {
+            throw new ApiError(400, "At least one valid field must be provided to update!");
         }
 
         const updatedUser = await User.findByIdAndUpdate(
             req.user?._id,
-            { $set: { height, weight, address } }, // email removed
+            { $set: updateFields },
             { new: true }
         ).select("-password -refreshToken");
 
