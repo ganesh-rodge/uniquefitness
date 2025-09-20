@@ -188,34 +188,34 @@ const logoutUser = asyncHandler(async(req, res)=>{
 })
 
 const updateLivePhoto = asyncHandler(async (req, res) => {
-    const livePhotoBuffer = req.file?.buffer;
+  const livePhotoBuffer = req.file?.buffer;
+  if (!livePhotoBuffer) throw new ApiError(400, "Live photo file is missing");
 
-    if (!livePhotoBuffer) {
-        throw new ApiError(400, "Live photo file is missing");
+  const user = await User.findById(req.user?._id);
+  if (!user) throw new ApiError(404, "User not found");
+
+  // ✅ Delete old photo from Cloudinary if exists
+  if (user.livePhotoUrl) {
+    try {
+      const urlParts = user.livePhotoUrl.split("/");
+      const publicIdWithExtension = urlParts.slice(urlParts.indexOf("upload") + 1).join("/"); 
+      const publicId = publicIdWithExtension.replace(/\.[^/.]+$/, ""); // remove extension
+      await deleteFromCloudinary(publicId);
+    } catch (err) {
+      console.error("⚠️ Failed to delete old photo from Cloudinary:", err.message);
     }
+  }
 
-    // Upload the buffer to Cloudinary
-    const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
+  // ✅ Upload new photo
+  const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
+  if (!livePhotoUpload?.url) throw new ApiError(500, "Failed to upload live photo");
 
-    if (!livePhotoUpload?.url) {
-        throw new ApiError(500, "Failed to upload live photo");
-    }
+  user.livePhotoUrl = livePhotoUpload.url;
+  await user.save({ validateBeforeSave: false });
 
-    const updatedUser = await User.findByIdAndUpdate(
-        req.user?._id,
-        { $set: { livePhotoUrl: livePhotoUpload.url } },
-        { new: true }
-    ).select("-password -refreshToken");
-
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                updatedUser,
-                "Live Photo updated successfully!"
-            )
-        );
+  return res.status(200).json(
+    new ApiResponse(200, user.toObject(), "Live Photo updated successfully!")
+  );
 });
 
 
@@ -311,15 +311,15 @@ const changeCurrentPassword = asyncHandler ( async (req, res)=>{
 const updateAccountDetails = asyncHandler(async (req, res) => {
     try {
         console.log("REQ BODY:", req.body);
-        const { email, height, weight, address } = req.body;
+        const { height, weight, address } = req.body; // removed email
 
-        if ( !email || !height || !weight || !address) {
+        if (!height || !weight || !address) {
             throw new ApiError(400, "All fields are required!");
         }
 
         const updatedUser = await User.findByIdAndUpdate(
             req.user?._id,
-            { $set: { email, height, weight, address } },
+            { $set: { height, weight, address } }, // email removed
             { new: true }
         ).select("-password -refreshToken");
 
@@ -331,6 +331,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 const updateWeight = asyncHandler(async (req, res) => {
     const { weight } = req.body;
