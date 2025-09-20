@@ -12,20 +12,27 @@ const createOrUpdateSchedule = async (req, res, next) => {
             return res.status(404).json(new ApiResponse(false, "User not found"));
         }
 
-        // Ensure customWorkoutSchedule is initialized as a Map
+        // ✅ Initialize as Map if not present
         if (!user.customWorkoutSchedule || !(user.customWorkoutSchedule instanceof Map)) {
             user.customWorkoutSchedule = new Map();
         }
 
-        // Merge new data into existing schedule
+        // ✅ Merge new data into existing schedule
         for (const [day, workouts] of Object.entries(scheduleData)) {
-            user.customWorkoutSchedule.set(day.toLowerCase(), workouts);
+            if (Array.isArray(workouts)) {
+                user.customWorkoutSchedule.set(day.toLowerCase(), workouts);
+            } else {
+                return res.status(400).json(new ApiResponse(false, `Workouts for ${day} must be an array of strings`));
+            }
         }
 
         await user.save();
 
+        // Convert Map to object before sending response
+        const scheduleObject = Object.fromEntries(user.customWorkoutSchedule);
+
         res.status(200).json(
-            new ApiResponse(true, "Schedule saved successfully", user.customWorkoutSchedule)
+            new ApiResponse(true, "Schedule saved successfully", scheduleObject)
         );
     } catch (error) {
         console.error("Error in createOrUpdateSchedule:", error);
@@ -43,8 +50,13 @@ const getUserSchedule = async (req, res, next) => {
             return res.status(404).json(new ApiResponse(false, "User not found"));
         }
 
+        // Convert Map to object before sending response
+        const scheduleObject = user.customWorkoutSchedule 
+            ? Object.fromEntries(user.customWorkoutSchedule) 
+            : {};
+
         res.status(200).json(
-            new ApiResponse(true, "User schedule fetched", user.customWorkoutSchedule || {})
+            new ApiResponse(true, "User schedule fetched", scheduleObject)
         );
     } catch (error) {
         console.error("Error in getUserSchedule:", error);
