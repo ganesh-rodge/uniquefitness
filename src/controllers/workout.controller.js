@@ -1,17 +1,18 @@
 import { UserWorkoutSchedule } from "../models/workout.model.js";
+import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 // ---------------- CREATE OR UPDATE SCHEDULE ----------------
 const createOrUpdateSchedule = async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const scheduleData = req.body; // { monday: [...], tuesday: [...], ... }
+    const scheduleData = req.body; // { monday: ["chest", "triceps"], ... }
 
-    // Find if schedule exists for this user
+    // ------------------ 1. Update UserWorkoutSchedule ------------------
     let schedule = await UserWorkoutSchedule.findOne({ user: userId });
 
     if (schedule) {
-      // Update existing schedule
+      // Merge existing schedule with new data
       Object.assign(schedule.schedule, scheduleData);
       await schedule.save();
     } else {
@@ -22,14 +23,41 @@ const createOrUpdateSchedule = async (req, res, next) => {
       });
     }
 
-    // ✅ Also update the user's customWorkoutSchedule
-    await User.findByIdAndUpdate(
-      userId,
-      { customWorkoutSchedule: scheduleData },
-      { new: true }
-    );
+    // ------------------ 2. Update user's customWorkoutSchedule ------------------
+    const transformedSchedule = Object.entries(scheduleData).map(([day, workouts]) => ({
+      day,
+      workouts: workouts.map(workoutId => ({ workoutId })) // ensure workoutId is ObjectId
+    }));
 
-    res.status(200).json(new ApiResponse(true, "Schedule saved", schedule));
+    // Fetch user
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json(new ApiResponse(false, "User not found"));
+    }
+
+    // Merge existing customWorkoutSchedule with new/updated days
+    transformedSchedule.forEach((newDaySchedule) => {
+      const existingDayIndex = user.customWorkoutSchedule.findIndex(
+        (d) => d.day.toLowerCase() === newDaySchedule.day.toLowerCase()
+      );
+
+      if (existingDayIndex > -1) {
+        // Replace workouts for that day
+        user.customWorkoutSchedule[existingDayIndex].workouts = newDaySchedule.workouts;
+      } else {
+        // Add new day
+        user.customWorkoutSchedule.push(newDaySchedule);
+      }
+    });
+
+    await user.save();
+
+    res.status(200).json(new ApiResponse(true, "Schedule updated successfully", {
+      userSchedule: user.customWorkoutSchedule,
+      workoutSchedule: schedule.schedule
+    }));
+    
   } catch (error) {
     next(error);
   }
@@ -37,22 +65,21 @@ const createOrUpdateSchedule = async (req, res, next) => {
 
 // ---------------- GET USER SCHEDULE ----------------
 const getUserSchedule = async (req, res, next) => {
-    try {
-        const userId = req.user._id;
-        const schedule = await UserWorkoutSchedule.findOne({ user: userId });
+  try {
+    const userId = req.user._id;
+    const schedule = await UserWorkoutSchedule.findOne({ user: userId });
 
-        if (!schedule) {
-            return res.status(404).json(new ApiResponse(false, "No schedule found"));
-        }
-
-        res.status(200).json(new ApiResponse(true, "User schedule fetched", schedule));
-    } catch (error) {
-        next(error);
+    if (!schedule) {
+      return res.status(404).json(new ApiResponse(false, "No schedule found"));
     }
+
+    res.status(200).json(new ApiResponse(true, "User schedule fetched", schedule));
+  } catch (error) {
+    next(error);
+  }
 };
 
-
 export {
-    createOrUpdateSchedule,
-    getUserSchedule
-}
+  createOrUpdateSchedule,
+  getUserSchedule
+};
