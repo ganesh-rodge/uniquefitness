@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(verifyJWT);
 
 // Create or update user workout schedule
-router.post("/", createOrUpdateSchedule);
+router.patch("/", createOrUpdateSchedule);
 
 // Get user schedule
 router.get("/", getUserSchedule);
