@@ -5,7 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { sendEmailOtp } from "../utils/otpService.js";
+import { sendEmail } from "../utils/mail.js";
 
 /** ---------------------------
  * Generate Access Token
@@ -169,7 +169,10 @@ const forgotPasswordAdmin = asyncHandler(async (req, res) => {
     admin.OTPExpiry = Date.now() + 10 * 60 * 1000; // 10 min expiry
     await admin.save();
 
-    await sendEmailOtp(email, otp);
+    // Send OTP using Resend
+    const subject = "Your Unique Fitness OTP";
+    const html = `<h2>Your OTP is ${otp}</h2><p>Expires in 10 minutes.</p>`;
+    await sendEmail(email, subject, html);
 
     return res
         .status(200)

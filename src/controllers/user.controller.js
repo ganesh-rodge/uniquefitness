@@ -1,6 +1,7 @@
 import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/ApiError.js"
-import {generateOtp, sendEmailOtp} from "../utils/otpService.js"
+import { generateOtp } from "../utils/otpService.js";
+import { sendEmail } from "../utils/mail.js";
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 import jwt from "jsonwebtoken"
@@ -31,33 +32,35 @@ const generateAccessAndRefreshToken = async (userId) =>{
 }
 
 
-//Step 1: Send OTP
-const sendOTP = asyncHandler(async(req, res)=>{
-    const {email} = req.body;
 
-    if(!email) throw new ApiError(400, "Email is required")
+// Step 1: Send OTP using Resend
+const sendOTP = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    if (!email) throw new ApiError(400, "Email is required");
 
-    const userExists = await User.findOne({email});
+    const userExists = await User.findOne({ email });
+    if (userExists) throw new ApiError(409, "User already exists");
 
-    if(userExists) throw new ApiError(409, "User already exists")
-    
-    const otp = generateOtp()
-    otpStore[email] = {otp, expiresAt: Date.now() + 10 * 60 * 1000};
+    const otp = generateOtp();
+    otpStore[email] = { otp, expiresAt: Date.now() + 10 * 60 * 1000 };
 
-    await sendEmailOtp(email, otp)
+    // Send OTP using Resend
+    const subject = "Your Unique Fitness OTP";
+    const html = `<h2>Your OTP is ${otp}</h2><p>Expires in 10 minutes.</p>`;
+        await sendEmail(email, subject, html);
 
     return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "OTP sent successFully"))
-})
+        .status(200)
+        .json(new ApiResponse(200, {}, "OTP sent successfully"));
+});
 
-//Step 2: verify otp
-const verifyOTP = asyncHandler(async (req, res)=>{
-    const {email, otp} = req.body
 
-    if(!email || !otp) throw new ApiError(400, "Email and OTP are required !")
+// Step 2: Verify OTP
+const verifyOTP = asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
+    if (!email || !otp) throw new ApiError(400, "Email and OTP are required!");
 
-     const storedOtpData = otpStore[email];
+    const storedOtpData = otpStore[email];
     if (!storedOtpData) throw new ApiError(400, "No OTP found for this email");
     if (storedOtpData.otp !== otp) throw new ApiError(400, "Invalid OTP");
     if (Date.now() > storedOtpData.expiresAt) throw new ApiError(400, "OTP expired");
@@ -67,7 +70,7 @@ const verifyOTP = asyncHandler(async (req, res)=>{
     const signupToken = jwt.sign({ email }, process.env.SIGNUP_TOKEN_SECRET, { expiresIn: "30m" });
 
     return res.status(200).json(new ApiResponse(200, { signupToken }, "OTP verified successfully"));
-})
+});
 
 //step 3: registering the user
 const registerUser = asyncHandler(async (req, res) => {
@@ -395,28 +398,30 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) throw new ApiError(404, "User not found");
 
-    // Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Update the user document directly without full validation
-    const updatedUser = await User.findOneAndUpdate(
-        { email },
-        {
-            $set: {
-                emailOTP: otp,
-                OTPExpiry: Date.now() + 10 * 60 * 1000, // 10 mins expiry
+        // Generate OTP
+        const otp = generateOtp();
+        // Update the user document directly without full validation
+        const updatedUser = await User.findOneAndUpdate(
+            { email },
+            {
+                $set: {
+                    emailOTP: otp,
+                    OTPExpiry: Date.now() + 10 * 60 * 1000, // 10 mins expiry
+                },
             },
-        },
-        { new: true } // Return the updated document
-    );
+            { new: true } // Return the updated document
+        );
 
-    // If the update was not successful for some reason
-    if (!updatedUser) {
-        throw new ApiError(500, "Failed to update user for password reset");
-    }
+        // If the update was not successful for some reason
+        if (!updatedUser) {
+            throw new ApiError(500, "Failed to update user for password reset");
+        }
 
-    // Send Email
-    await sendEmailOtp(email, otp);
+        // Send Email using Resend
+        const subject = "Your Unique Fitness OTP";
+        const html = `<h2>Your OTP is ${otp}</h2><p>Expires in 10 minutes.</p>`;
+        await sendEmail(email, subject, html);
 
     return res
         .status(200)
