@@ -14,7 +14,7 @@ const generateAdminAccessToken = (admin) => {
     return jwt.sign(
         { _id: admin._id, role: admin.role },
         process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
+        { expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "2d" }
     );
 };
 
@@ -22,26 +22,30 @@ const generateAdminAccessToken = (admin) => {
  * Admin Login
  * --------------------------- */
 const loginAdmin = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    if (!email || !password) throw new ApiError(400, "Email and Password are required");
+  if (!email || !password) throw new ApiError(400, "Email and Password are required");
 
-    const admin = await Admin.findOne({ email });
-    if (!admin) throw new ApiError(401, "Invalid credentials!");
+  const admin = await Admin.findOne({ email });
+  if (!admin) throw new ApiError(401, "Invalid credentials!");
 
-    const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) throw new ApiError(401, "Invalid credentials!");
+  const isMatch = await bcrypt.compare(password, admin.password);
+  if (!isMatch) throw new ApiError(401, "Invalid credentials!");
 
-    const accessToken = generateAdminAccessToken(admin);
+  const accessToken = generateAdminAccessToken(admin);
 
-    return res
-        .status(200)
-        .cookie("accessToken", accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "Lax"
-        })
-        .json(new ApiResponse(200, { admin, accessToken }, "Admin logged in successfully"));
+  // Set httpOnly cookie
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", // true on HTTPS
+    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+    maxAge: 2 * 24 * 60 * 60 * 1000, // 2 days
+  });
+
+  // Send admin info + token for Postman testing
+  return res.status(200).json(
+    new ApiResponse(200, { admin, accessToken }, "Admin logged in successfully")
+  );
 });
 
 /** ---------------------------
@@ -234,7 +238,7 @@ const updateMemberMembership = asyncHandler(async (req, res) => {
 const adminDashboardStats = asyncHandler(async (req, res) => {
     const now = new Date();
     const soon = new Date();
-    soon.setDate(soon.getDate() + 7); // Expiring within 7 days
+    soon.setDate(soon.getDate() + 7);
 
     const totalMembers = await User.countDocuments();
     const activeMembers = await User.countDocuments({ "membership.status": "active" });
@@ -251,6 +255,7 @@ const adminDashboardStats = asyncHandler(async (req, res) => {
         expiredMembers
     }, "Dashboard stats fetched successfully"));
 });
+
 
 const adminReports = asyncHandler(async (req, res) => {
     const { startDate, endDate } = req.query;
