@@ -25,14 +25,43 @@ const deleteDietPlan = asyncHandler(async (req, res) => {
 });
 import { DietPlan } from "../models/dietplan.model.js";
 
-// Admin: Create a new diet plan
+// Admin: Create one or more diet plans (bulk supported)
 const createDietPlan = asyncHandler(async (req, res) => {
-    const { purpose, timing, category, plan } = req.body;
-    if (!purpose || !timing || !category || !Array.isArray(plan) || plan.length === 0) {
-        throw new ApiError(400, "All fields (purpose, timing, category, plan) are required and plan must be a non-empty array.");
+    let input = req.body;
+    let toInsert = [];
+
+    // Accepts:
+    // 1. Array of { purpose, category, plan }
+    // 2. Single { purpose, category, plan }
+    // 3. Array of { purpose, categories: [{ category, plan }] }
+    // 4. Single { purpose, categories: [...] }
+
+    if (!Array.isArray(input)) {
+        input = [input];
     }
-    const dietPlan = await DietPlan.create({ purpose, timing, category, plan });
-    return res.status(201).json(new ApiResponse(201, dietPlan, "Diet plan created successfully"));
+
+    input.forEach((item) => {
+        if (item.categories && Array.isArray(item.categories)) {
+            // Nested format: { purpose, categories: [{ category, plan }] }
+            item.categories.forEach((cat) => {
+                const { category, plan: planArr } = cat;
+                if (!item.purpose || !category || !Array.isArray(planArr)) {
+                    throw new ApiError(400, 'Each category must have purpose, category, and plan array');
+                }
+                toInsert.push({ purpose: item.purpose, category, plan: planArr });
+            });
+        } else {
+            // Flat format: { purpose, category, plan }
+            const { purpose, category, plan: planArr } = item;
+            if (!purpose || !category || !Array.isArray(planArr)) {
+                throw new ApiError(400, 'Each diet plan must have purpose, category, and plan array');
+            }
+            toInsert.push({ purpose, category, plan: planArr });
+        }
+    });
+
+    const created = await DietPlan.insertMany(toInsert);
+    res.status(201).json({ success: true, data: created });
 });
 import { Admin } from "../models/admin.model.js";
 import { User } from "../models/user.model.js";

@@ -16,7 +16,6 @@ const PlanItemSchema = new mongoose.Schema({
 
 const DietPlanSchema = new mongoose.Schema({
   purpose: { type: String, required: true },
-  timing: { type: String, required: true },
   category: { type: String, required: true },
   plan: { type: [PlanItemSchema], required: true },
 }, { timestamps: true });
