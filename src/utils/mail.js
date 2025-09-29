@@ -12,10 +12,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 export const sendEmail = async (to, subject, html) => {
   const msg = {
     to,
-    from: {
-      email: process.env.SENDGRID_FROM_EMAIL, // Use your verified Gmail
-      name: 'Unique Fitness'
-    },
+    from: `${'Unique Fitness'} <${process.env.SENDGRID_FROM_EMAIL}>`,
     subject,
     html,
   };

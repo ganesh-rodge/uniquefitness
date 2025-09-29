@@ -1,3 +1,39 @@
+// Public: Get all diet plans
+const getAllDietPlans = asyncHandler(async (req, res) => {
+    const diets = await DietPlan.find();
+    return res.status(200).json(new ApiResponse(200, diets, "All diet plans fetched successfully"));
+});
+// Admin: Update a diet plan
+const updateDietPlan = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { purpose, timing, category, plan } = req.body;
+    const updated = await DietPlan.findByIdAndUpdate(
+        id,
+        { purpose, timing, category, plan },
+        { new: true, runValidators: true }
+    );
+    if (!updated) throw new ApiError(404, "Diet plan not found");
+    return res.status(200).json(new ApiResponse(200, updated, "Diet plan updated successfully"));
+});
+
+// Admin: Delete a diet plan
+const deleteDietPlan = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const deleted = await DietPlan.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, "Diet plan not found");
+    return res.status(200).json(new ApiResponse(200, {}, "Diet plan deleted successfully"));
+});
+import { DietPlan } from "../models/dietplan.model.js";
+
+// Admin: Create a new diet plan
+const createDietPlan = asyncHandler(async (req, res) => {
+    const { purpose, timing, category, plan } = req.body;
+    if (!purpose || !timing || !category || !Array.isArray(plan) || plan.length === 0) {
+        throw new ApiError(400, "All fields (purpose, timing, category, plan) are required and plan must be a non-empty array.");
+    }
+    const dietPlan = await DietPlan.create({ purpose, timing, category, plan });
+    return res.status(201).json(new ApiResponse(201, dietPlan, "Diet plan created successfully"));
+});
 import { Admin } from "../models/admin.model.js";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -286,5 +322,9 @@ export {
     getSingleMemberById,
     updateMemberMembership,
     adminDashboardStats,
-    adminReports
+    adminReports,
+    createDietPlan,
+    updateDietPlan,
+    deleteDietPlan,
+    getAllDietPlans
 };

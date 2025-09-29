@@ -1,3 +1,4 @@
+// Public: Get all diet plans (no auth)
 import express from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { verifyAdmin } from "../middlewares/verifyAdmin.middleware.js";
@@ -12,14 +13,24 @@ import {
     getSingleMemberById,
     updateMemberMembership,
     adminDashboardStats,
-    adminReports
+    adminReports,
+    createDietPlan,
+    updateDietPlan,
+    deleteDietPlan,
+    getAllDietPlans
 } from "../controllers/admin.controller.js";
+
 
 const router = express.Router();
 
 // Auth
 router.post("/login", loginAdmin);
 
+// Diet Plan Management
+router.post("/dietplan", verifyJWT, verifyAdmin, createDietPlan);
+router.put("/dietplan/:id", verifyJWT, verifyAdmin, updateDietPlan);
+router.delete("/dietplan/:id", verifyJWT, verifyAdmin, deleteDietPlan);
+router.get("/dietplans", getAllDietPlans);
 
 // Member Management
 router.get("/members", verifyJWT, verifyAdmin, getAllMembers);

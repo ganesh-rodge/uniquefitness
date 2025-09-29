@@ -1,34 +1,24 @@
 import mongoose from "mongoose";
 
-const dietPlanSchema = new mongoose.Schema({
-    title: {
-        type: String,
-        required: true
-    },
-    description: {
-        type: String,
-    },
-    calories: {
-        type: Number,
-    },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        refPath: "creatorModel", // reference dynamic model (User or Admin)
-        required: true
-    },
-    creatorModel: {
-        type: String,
-        required: true,
-        enum: ["User", "Admin"] // can only be one of these
-    },
-    isDefault: {
-        type: Boolean,
-        default: false // admin plans: true, user plans: false
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    }
-});
 
-export const DietPlan = mongoose.model("DietPlan", dietPlanSchema);
+const NutritionSchema = new mongoose.Schema({
+  calories: { type: Number, required: true },
+  protein: { type: String, required: true },
+  carbs: { type: String, required: true },
+  fat: { type: String, required: true },
+}, { _id: false });
+
+const PlanItemSchema = new mongoose.Schema({
+  time: { type: String, required: true },
+  items: { type: String, required: true },
+  nutrition: { type: NutritionSchema, required: true },
+}, { _id: false });
+
+const DietPlanSchema = new mongoose.Schema({
+  purpose: { type: String, required: true },
+  timing: { type: String, required: true },
+  category: { type: String, required: true },
+  plan: { type: [PlanItemSchema], required: true },
+}, { timestamps: true });
+
+export const DietPlan = mongoose.model("DietPlan", DietPlanSchema);

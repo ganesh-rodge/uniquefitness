@@ -102,20 +102,74 @@ const registerUser = asyncHandler(async (req, res) => {
     const aadhaarUpload = await uploadOnCloudinary(aadhaarBuffer);
     const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
 
-    const user = await User.create({
-        fullName,
-        email,
-        phone,
-        password,
-        isEmailVerified: true,
-        height,
-        weight,
-        gender,
-        dob,
-        address,
-        aadhaarPhotoUrl: aadhaarUpload.url,
-        livePhotoUrl: livePhotoUpload.url
-    });
+
+        // Define workout splits
+        const workoutSplits = [
+            {
+                Monday: ["Legs"],
+                Tuesday: ["Back"],
+                Wednesday: ["Chest"],
+                Thursday: ["Biceps"],
+                Friday: ["Shoulders"],
+                Saturday: ["Triceps"],
+                Sunday: ["Rest"]
+            },
+            {
+                Monday: ["Back"],
+                Tuesday: ["Shoulders"],
+                Wednesday: ["Triceps"],
+                Thursday: ["Chest"],
+                Friday: ["Legs"],
+                Saturday: ["Biceps"],
+                Sunday: ["Rest"]
+            },
+            {
+                Monday: ["Shoulders"],
+                Tuesday: ["Chest"],
+                Wednesday: ["Legs"],
+                Thursday: ["Triceps"],
+                Friday: ["Back"],
+                Saturday: ["Biceps"],
+                Sunday: ["Rest"]
+            },
+            {
+                Monday: ["Chest"],
+                Tuesday: ["Legs"],
+                Wednesday: ["Shoulders"],
+                Thursday: ["Back"],
+                Friday: ["Triceps"],
+                Saturday: ["Biceps"],
+                Sunday: ["Rest"]
+            },
+            {
+                Monday: ["Biceps"],
+                Tuesday: ["Chest"],
+                Wednesday: ["Triceps"],
+                Thursday: ["Legs"],
+                Friday: ["Back"],
+                Saturday: ["Shoulders"],
+                Sunday: ["Rest"]
+            }
+        ];
+
+        // Pick a random split
+        const randomSplit = workoutSplits[Math.floor(Math.random() * workoutSplits.length)];
+
+        const user = await User.create({
+                fullName,
+                email,
+                phone,
+                password,
+                isEmailVerified: true,
+                height,
+                weight,
+                gender,
+                dob,
+                address,
+                aadhaarPhotoUrl: aadhaarUpload.url,
+                livePhotoUrl: livePhotoUpload.url,
+                customWorkoutSchedule: randomSplit
+        });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 
