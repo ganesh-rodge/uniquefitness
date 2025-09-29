@@ -152,23 +152,26 @@ const registerUser = asyncHandler(async (req, res) => {
             }
         ];
 
-        // Pick a random split
+        // Pick a random split and standardize keys to lowercase
         const randomSplit = workoutSplits[Math.floor(Math.random() * workoutSplits.length)];
+        const lowerCaseSplit = Object.fromEntries(
+          Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
+        );
 
         const user = await User.create({
-                fullName,
-                email,
-                phone,
-                password,
-                isEmailVerified: true,
-                height,
-                weight,
-                gender,
-                dob,
-                address,
-                aadhaarPhotoUrl: aadhaarUpload.url,
-                livePhotoUrl: livePhotoUpload.url,
-                customWorkoutSchedule: randomSplit
+            fullName,
+            email,
+            phone,
+            password,
+            isEmailVerified: true,
+            height,
+            weight,
+            gender,
+            dob,
+            address,
+            aadhaarPhotoUrl: aadhaarUpload.url,
+            livePhotoUrl: livePhotoUpload.url,
+            customWorkoutSchedule: lowerCaseSplit
         });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
