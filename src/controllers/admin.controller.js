@@ -215,7 +215,7 @@ const changeAdminPassword = asyncHandler(async (req, res) => {
     const isMatch = await bcrypt.compare(oldPassword, admin.password);
     if (!isMatch) throw new ApiError(401, "Old password is incorrect");
 
-    admin.password = await bcrypt.hash(newPassword, 10);
+    admin.password = newPassword;
     await admin.save();
 
     return res.status(200).json(new ApiResponse(200, {}, "Password changed successfully"));
