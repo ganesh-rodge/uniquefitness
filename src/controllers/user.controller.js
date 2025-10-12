@@ -1,3 +1,117 @@
+// Admin-only: Create a new user (no OTP, no signup token)
+const adminCreateUser = asyncHandler(async (req, res) => {
+    // Only allow if req.user is admin (enforce in route)
+    const requiredFields = ["fullName", "email", "password", "phone", "height", "weight", "gender", "dob", "address"];
+    for (const field of requiredFields) {
+        if (!req.body[field]) throw new ApiError(400, `${field} is required`);
+    }
+
+    const { fullName, email, password, phone, height, weight, gender, dob, address } = req.body;
+
+    // Check for duplicate email
+    const userExists = await User.findOne({ email });
+    if (userExists) throw new ApiError(409, "User already exists with this email");
+
+    const aadhaarBuffer = req.files?.aadhaarPhoto?.[0]?.buffer;
+    const livePhotoBuffer = req.files?.livePhoto?.[0]?.buffer;
+    if (!aadhaarBuffer || !livePhotoBuffer) {
+        throw new ApiError(400, "Both Aadhaar and Live photos are required");
+    }
+
+    const aadhaarUpload = await uploadOnCloudinary(aadhaarBuffer);
+    const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
+
+    // Define workout splits
+    const workoutSplits = [
+        {
+            Monday: ["Legs"],
+            Tuesday: ["Back"],
+            Wednesday: ["Chest"],
+            Thursday: ["Biceps"],
+            Friday: ["Shoulders"],
+            Saturday: ["Triceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Back"],
+            Tuesday: ["Shoulders"],
+            Wednesday: ["Triceps"],
+            Thursday: ["Chest"],
+            Friday: ["Legs"],
+            Saturday: ["Biceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Shoulders"],
+            Tuesday: ["Chest"],
+            Wednesday: ["Legs"],
+            Thursday: ["Triceps"],
+            Friday: ["Back"],
+            Saturday: ["Biceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Chest"],
+            Tuesday: ["Legs"],
+            Wednesday: ["Shoulders"],
+            Thursday: ["Back"],
+            Friday: ["Triceps"],
+            Saturday: ["Biceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Biceps"],
+            Tuesday: ["Chest"],
+            Wednesday: ["Triceps"],
+            Thursday: ["Legs"],
+            Friday: ["Back"],
+            Saturday: ["Shoulders"],
+            Sunday: ["Rest"]
+        }
+    ];
+
+    // Pick a random split and standardize keys to lowercase
+    const randomSplit = workoutSplits[Math.floor(Math.random() * workoutSplits.length)];
+    const lowerCaseSplit = Object.fromEntries(
+      Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
+    );
+
+    const user = await User.create({
+        fullName,
+        email,
+        phone,
+        password,
+        isEmailVerified: true,
+        height,
+        weight,
+        gender,
+        dob,
+        address,
+        aadhaarPhotoUrl: aadhaarUpload.url,
+        livePhotoUrl: livePhotoUpload.url,
+        customWorkoutSchedule: lowerCaseSplit
+    });
+
+    // Log activity for admin-created member
+    const { logActivity } = await import("../utils/activityLogger.js");
+    await logActivity({
+      actor: req.user._id, // Admin's id
+      action: "admin created member",
+      resourceType: "member",
+      resourceId: user._id,
+      metadata: { fullName, email, phone }
+    });
+
+    return res.status(201).json(
+        new ApiResponse(201, {
+            user: {
+                ...user.toObject(),
+                password: undefined,
+                refreshToken: undefined
+            }
+        }, "User created successfully by admin")
+    );
+});
 import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { generateOtp } from "../utils/otpService.js";
@@ -92,7 +206,6 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const { fullName, password, phone, height, weight, gender, dob, address } = req.body;
 
-
     const aadhaarBuffer = req.files?.aadhaarPhoto?.[0]?.buffer;
     const livePhotoBuffer = req.files?.livePhoto?.[0]?.buffer;
     if (!aadhaarBuffer || !livePhotoBuffer) {
@@ -102,77 +215,86 @@ const registerUser = asyncHandler(async (req, res) => {
     const aadhaarUpload = await uploadOnCloudinary(aadhaarBuffer);
     const livePhotoUpload = await uploadOnCloudinary(livePhotoBuffer);
 
+    // Define workout splits
+    const workoutSplits = [
+        {
+            Monday: ["Legs"],
+            Tuesday: ["Back"],
+            Wednesday: ["Chest"],
+            Thursday: ["Biceps"],
+            Friday: ["Shoulders"],
+            Saturday: ["Triceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Back"],
+            Tuesday: ["Shoulders"],
+            Wednesday: ["Triceps"],
+            Thursday: ["Chest"],
+            Friday: ["Legs"],
+            Saturday: ["Biceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Shoulders"],
+            Tuesday: ["Chest"],
+            Wednesday: ["Legs"],
+            Thursday: ["Triceps"],
+            Friday: ["Back"],
+            Saturday: ["Biceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Chest"],
+            Tuesday: ["Legs"],
+            Wednesday: ["Shoulders"],
+            Thursday: ["Back"],
+            Friday: ["Triceps"],
+            Saturday: ["Biceps"],
+            Sunday: ["Rest"]
+        },
+        {
+            Monday: ["Biceps"],
+            Tuesday: ["Chest"],
+            Wednesday: ["Triceps"],
+            Thursday: ["Legs"],
+            Friday: ["Back"],
+            Saturday: ["Shoulders"],
+            Sunday: ["Rest"]
+        }
+    ];
 
-        // Define workout splits
-        const workoutSplits = [
-            {
-                Monday: ["Legs"],
-                Tuesday: ["Back"],
-                Wednesday: ["Chest"],
-                Thursday: ["Biceps"],
-                Friday: ["Shoulders"],
-                Saturday: ["Triceps"],
-                Sunday: ["Rest"]
-            },
-            {
-                Monday: ["Back"],
-                Tuesday: ["Shoulders"],
-                Wednesday: ["Triceps"],
-                Thursday: ["Chest"],
-                Friday: ["Legs"],
-                Saturday: ["Biceps"],
-                Sunday: ["Rest"]
-            },
-            {
-                Monday: ["Shoulders"],
-                Tuesday: ["Chest"],
-                Wednesday: ["Legs"],
-                Thursday: ["Triceps"],
-                Friday: ["Back"],
-                Saturday: ["Biceps"],
-                Sunday: ["Rest"]
-            },
-            {
-                Monday: ["Chest"],
-                Tuesday: ["Legs"],
-                Wednesday: ["Shoulders"],
-                Thursday: ["Back"],
-                Friday: ["Triceps"],
-                Saturday: ["Biceps"],
-                Sunday: ["Rest"]
-            },
-            {
-                Monday: ["Biceps"],
-                Tuesday: ["Chest"],
-                Wednesday: ["Triceps"],
-                Thursday: ["Legs"],
-                Friday: ["Back"],
-                Saturday: ["Shoulders"],
-                Sunday: ["Rest"]
-            }
-        ];
+    // Pick a random split and standardize keys to lowercase
+    const randomSplit = workoutSplits[Math.floor(Math.random() * workoutSplits.length)];
+    const lowerCaseSplit = Object.fromEntries(
+      Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
+    );
 
-        // Pick a random split and standardize keys to lowercase
-        const randomSplit = workoutSplits[Math.floor(Math.random() * workoutSplits.length)];
-        const lowerCaseSplit = Object.fromEntries(
-          Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
-        );
+    const user = await User.create({
+        fullName,
+        email,
+        phone,
+        password,
+        isEmailVerified: true,
+        height,
+        weight,
+        gender,
+        dob,
+        address,
+        aadhaarPhotoUrl: aadhaarUpload.url,
+        livePhotoUrl: livePhotoUpload.url,
+        customWorkoutSchedule: lowerCaseSplit
+    });
 
-        const user = await User.create({
-            fullName,
-            email,
-            phone,
-            password,
-            isEmailVerified: true,
-            height,
-            weight,
-            gender,
-            dob,
-            address,
-            aadhaarPhotoUrl: aadhaarUpload.url,
-            livePhotoUrl: livePhotoUpload.url,
-            customWorkoutSchedule: lowerCaseSplit
-        });
+    // Log activity for new member creation
+    const { logActivity } = await import("../utils/activityLogger.js");
+    await logActivity({
+      actor: user._id, // The new user's id
+      action: "created member",
+      resourceType: "member",
+      resourceId: user._id,
+      metadata: { fullName, email, phone }
+    });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 
@@ -570,6 +692,7 @@ export {
     sendOTP,
     verifyOTP,
     registerUser,
+    adminCreateUser,
     loginUser,
     logoutUser,
     updateLivePhoto,

@@ -71,6 +71,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/mail.js";
+import { Activity } from "../models/activity.model.js";
 
 /** ---------------------------
  * Generate Access Token
@@ -166,26 +167,46 @@ const getAllMembers = asyncHandler(async (req, res) => {
  * Update Member (Admin Control)
  * --------------------------- */
 const updateMemberByAdmin = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
-    const updateData = req.body;
+        const { userId } = req.params;
+        const updateData = req.body;
 
-    const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true }).select("-password -refreshToken");
+        const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true }).select("-password -refreshToken");
 
-    if (!updatedUser) throw new ApiError(404, "User not found");
+        if (!updatedUser) throw new ApiError(404, "User not found");
 
-    return res.status(200).json(new ApiResponse(200, updatedUser, "User updated successfully"));
+        // Log activity
+        const { logActivity } = await import("../utils/activityLogger.js");
+        await logActivity({
+            actor: req.user._id,
+            action: "updated member",
+            resourceType: "member",
+            resourceId: userId,
+            metadata: updateData
+        });
+
+        return res.status(200).json(new ApiResponse(200, updatedUser, "User updated successfully"));
 });
 
 /** ---------------------------
  * Delete Member
  * --------------------------- */
 const deleteMemberByAdmin = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
+        const { userId } = req.params;
 
-    const deletedUser = await User.findByIdAndDelete(userId);
-    if (!deletedUser) throw new ApiError(404, "User not found");
+        const deletedUser = await User.findByIdAndDelete(userId);
+        if (!deletedUser) throw new ApiError(404, "User not found");
 
-    return res.status(200).json(new ApiResponse(200, {}, "User deleted successfully"));
+        // Log activity
+        const { logActivity } = await import("../utils/activityLogger.js");
+        await logActivity({
+            actor: req.user._id,
+            action: "deleted member",
+            resourceType: "member",
+            resourceId: userId,
+            metadata: deletedUser
+        });
+
+        return res.status(200).json(new ApiResponse(200, {}, "User deleted successfully"));
 });
 
 /** ---------------------------
@@ -309,18 +330,68 @@ const adminDashboardStats = asyncHandler(async (req, res) => {
     soon.setDate(soon.getDate() + 7);
 
     const totalMembers = await User.countDocuments();
-    const activeMembers = await User.countDocuments({ "membership.status": "active" });
-    const expiringSoon = await User.countDocuments({
-        "membership.status": "active",
-        "membership.endDate": { $lte: soon, $gte: now }
-    });
-    const expiredMembers = await User.countDocuments({ "membership.status": "expired" });
+
+    // Compute status on the fly to handle cases where membership.status is missing or outdated
+    const grouped = await User.aggregate([
+        {
+            $addFields: {
+                endDateParsed: {
+                    $cond: [
+                        { $ifNull: ["$membership.endDate", false] },
+                        { $toDate: "$membership.endDate" },
+                        null
+                    ]
+                },
+                computedStatus: {
+                    $cond: [
+                        { $eq: ["$membership.status", "inactive"] },
+                        "inactive",
+                        {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ifNull: ["$membership.endDate", false] },
+                                        { $lt: ["$endDateParsed", now] }
+                                    ]
+                                },
+                                "expired",
+                                {
+                                    $cond: [
+                                        {
+                                            $and: [
+                                                { $ifNull: ["$membership.endDate", false] },
+                                                { $gte: ["$endDateParsed", now] },
+                                                { $lte: ["$endDateParsed", soon] }
+                                            ]
+                                        },
+                                        "expiring",
+                                        // Default to active when endDate is in future or not provided but status isn't inactive/expired
+                                        "active"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        { $group: { _id: "$computedStatus", count: { $sum: 1 } } }
+    ]);
+
+    const counts = grouped.reduce((acc, cur) => { acc[cur._id] = cur.count; return acc; }, {});
+
+    const activeMembers = counts["active"] || 0;
+    const expiringSoon = counts["expiring"] || 0;
+    // Per requirement, expiredMembers should include both 'expired' and 'inactive'
+    const expiredMembers = (counts["expired"] || 0) + (counts["inactive"] || 0);
 
     return res.status(200).json(new ApiResponse(200, {
         totalMembers,
         activeMembers,
         expiringSoon,
-        expiredMembers
+        expiredMembers,
+        // Optional breakdown for debugging/visibility
+        breakdown: counts
     }, "Dashboard stats fetched successfully"));
 });
 
@@ -336,6 +407,46 @@ const adminReports = asyncHandler(async (req, res) => {
     const report = await User.find(query).populate("membership.planId");
 
     return res.status(200).json(new ApiResponse(200, report, "Report fetched successfully"));
+});
+
+// Recent Activities (admin only)
+const getRecentActivities = asyncHandler(async (req, res) => {
+    const { page = 1, limit = 20, resourceType, action } = req.query;
+    const query = {};
+    if (resourceType) query.resourceType = resourceType;
+    if (action) query.action = action;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [items, total] = await Promise.all([
+        Activity.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .populate('actor', 'name email'),
+        Activity.countDocuments(query)
+    ]);
+
+    // Format as simple announcement-style entries
+    const announcements = items.map((it) => {
+        const actorName = it.actor?.name || 'Admin';
+        const actionText = it.action?.replace('.', ' ');
+        const resType = it.resourceType;
+        const resId = it.resourceId ? ` (${it.resourceId})` : '';
+        return {
+            message: `${actorName} ${actionText} ${resType}${resId}`,
+            at: it.createdAt,
+            actor: { name: actorName, email: it.actor?.email }
+        };
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            page: Number(page),
+            limit: Number(limit),
+            total,
+            items: announcements
+        }, 'Recent activities fetched successfully')
+    );
 });
 
 
@@ -355,5 +466,6 @@ export {
     createDietPlan,
     updateDietPlan,
     deleteDietPlan,
-    getAllDietPlans
+    getAllDietPlans,
+    getRecentActivities
 };

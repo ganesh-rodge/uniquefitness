@@ -17,8 +17,12 @@ import {
     createDietPlan,
     updateDietPlan,
     deleteDietPlan,
-    getAllDietPlans
+    getAllDietPlans,
+    getRecentActivities
 } from "../controllers/admin.controller.js";
+import { adminCreateUser } from "../controllers/user.controller.js";
+import { upload } from "../middlewares/multer.middleware.js";
+// Admin-only: Create a new user (no OTP, no signup token)
 
 
 const router = express.Router();
@@ -48,6 +52,13 @@ router.patch("/member/:memberId/membership", verifyJWT, updateMemberMembership);
 router.get("/dashboard-stats", verifyJWT, adminDashboardStats);
 router.get("/reports", verifyJWT, adminReports); // Optional
 
+// Recent Activities
+router.get("/activities", verifyJWT, verifyAdmin, getRecentActivities);
 
+
+router.post("/create-user", verifyJWT, verifyAdmin, upload.fields([
+    { name: "aadhaarPhoto", maxCount: 1 },
+    { name: "livePhoto", maxCount: 1 }
+]), adminCreateUser);
 
 export default router;
