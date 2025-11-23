@@ -12,8 +12,6 @@ import workoutRouter from "./routes/workout.route.js";
 
 import paymentRouter from "./routes/payment.route.js";
 
-import testEmailRouter from "./routes/testemail.route.js";
-
 const app = express();
 
 // Middleware
@@ -45,8 +43,6 @@ app.use("/api/v1/announcement", announcementRouter);
 app.use("/api/v1/membership", membershipRouter);
 app.use("/api/v1/dietplan", dietplanRouter);
 app.use("/api/v1/workout", workoutRouter);
-
-app.use("/api/v1/testemail", testEmailRouter);
 app.use("/api/v1/payment", paymentRouter);
 
 // Error handling for CORS

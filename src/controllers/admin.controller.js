@@ -70,8 +70,9 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { sendEmail } from "../utils/mail.js";
 import { Activity } from "../models/activity.model.js";
+import { HexToken } from "../models/hexToken.model.js";
+import crypto from "crypto";
 
 /** ---------------------------
  * Generate Access Token
@@ -242,7 +243,7 @@ const changeAdminPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
-// Forgot Password (Send OTP)
+// Forgot Password (token-driven flow placeholder)
 const forgotPasswordAdmin = asyncHandler(async (req, res) => {
     const { email } = req.body;
     if (!email) throw new ApiError(400, "Email is required");
@@ -250,42 +251,48 @@ const forgotPasswordAdmin = asyncHandler(async (req, res) => {
     const admin = await Admin.findOne({ email });
     if (!admin) throw new ApiError(404, "Admin not found");
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    admin.emailOTP = otp;
-    admin.OTPExpiry = Date.now() + 10 * 60 * 1000; // 10 min expiry
-    await admin.save();
-
-    // Send OTP using Resend
-    const subject = "Your Unique Fitness OTP";
-    const html = `<h2>Your OTP is ${otp}</h2><p>Expires in 10 minutes.</p>`;
-    await sendEmail(email, subject, html);
-
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "OTP sent to admin email for password reset"));
+        .json(new ApiResponse(200, {}, "Request any active hex token (b1 or b2) from an active admin to reset the password."));
 });
 
-// Reset Password (Using OTP)
+// Reset Password (using b-prefixed token)
 const resetPasswordAdmin = asyncHandler(async (req, res) => {
-    const { email, otp, newPassword } = req.body;
-    if (!email || !otp || !newPassword)
-        throw new ApiError(400, "Email, OTP and new password are required");
+    const { email, token, newPassword } = req.body;
+    if (!email || !token || !newPassword)
+        throw new ApiError(400, "Email, token and new password are required");
 
     const admin = await Admin.findOne({ email });
     if (!admin) throw new ApiError(404, "Admin not found");
 
-    if (admin.emailOTP !== otp || admin.OTPExpiry < Date.now()) {
-        throw new ApiError(400, "Invalid or expired OTP");
+    const hexToken = await HexToken.findOne({
+        token,
+        prefix: { $in: ["b1", "b2"] },
+        isUsed: false,
+    });
+
+    if (!hexToken) {
+        throw new ApiError(400, "Invalid or already used token");
     }
 
     admin.password = newPassword;
-    admin.emailOTP = undefined;
-    admin.OTPExpiry = undefined;
     await admin.save();
+
+    hexToken.isUsed = true;
+    hexToken.usedBy = admin._id;
+    hexToken.usedAt = new Date();
+    hexToken.metadata = {
+        ...(hexToken.metadata || {}),
+        resetScope: "admin",
+        email,
+        tokenPrefix: hexToken.prefix,
+        originalPurpose: hexToken.purpose,
+    };
+    await hexToken.save();
 
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "Admin password reset successful"));
+        .json(new ApiResponse(200, {}, "Admin password reset successfully"));
 });
 
 const getSingleMemberById = asyncHandler(async (req, res) => {
@@ -449,6 +456,50 @@ const getRecentActivities = asyncHandler(async (req, res) => {
     );
 });
 
+// Helper to create and persist prefixed hex tokens
+const createAndStoreHexToken = async ({ prefix, purpose, adminId }) => {
+    let token;
+    let exists = true;
+
+    while (exists) {
+        token = `${prefix}${crypto.randomBytes(3).toString("hex")}`;
+        exists = await HexToken.exists({ token });
+    }
+
+    return HexToken.create({
+        token,
+        prefix,
+        purpose,
+        createdBy: adminId,
+    });
+};
+
+// Admin: Generate b1-prefixed hex token (registration)
+const generateB1HexToken = asyncHandler(async (req, res) => {
+    const hexToken = await createAndStoreHexToken({
+        prefix: "b1",
+        purpose: "registration",
+        adminId: req.user?._id,
+    });
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { token: hexToken.token }, "b1 token generated successfully"));
+});
+
+// Admin: Generate b2-prefixed hex token (password reset)
+const generateB2HexToken = asyncHandler(async (req, res) => {
+    const hexToken = await createAndStoreHexToken({
+        prefix: "b2",
+        purpose: "password-reset",
+        adminId: req.user?._id,
+    });
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, { token: hexToken.token }, "b2 token generated successfully"));
+});
+
 
 export {
     loginAdmin,
@@ -467,5 +518,7 @@ export {
     updateDietPlan,
     deleteDietPlan,
     getAllDietPlans,
-    getRecentActivities
+    getRecentActivities,
+    generateB1HexToken,
+    generateB2HexToken
 };

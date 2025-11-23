@@ -25,12 +25,6 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    emailOTP: {
-        type: String
-    },
-    OTPExpiry:{
-        type: Date
-    },
     height:{
         type: Number,
         required: true

@@ -7,10 +7,10 @@ import { resetPassword } from "../controllers/user.controller.js";
 
 const router = express.Router();
 
-// Step 1: Send OTP to email
+// Step 1: Validate email (no email sent)
 router.post("/send-otp", sendOTP);
 
-// Step 2: Verify OTP and return signup token
+// Step 2: Verify admin-issued b1/b2 token and return signup token
 router.post("/verify-otp", verifyOTP);
 
 // Step 3: Register user (needs signupToken from step 2)

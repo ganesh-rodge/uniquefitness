@@ -113,15 +113,12 @@ const adminCreateUser = asyncHandler(async (req, res) => {
     );
 });
 import { User } from "../models/user.model.js"
+import { HexToken } from "../models/hexToken.model.js";
 import { ApiError } from "../utils/ApiError.js"
-import { generateOtp } from "../utils/otpService.js";
-import { sendEmail } from "../utils/mail.js";
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 import jwt from "jsonwebtoken"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
-
-let otpStore = {}
 
 //Generating the tokens
 const generateAccessAndRefreshToken = async (userId) =>{
@@ -147,7 +144,7 @@ const generateAccessAndRefreshToken = async (userId) =>{
 
 
 
-// Step 1: Send OTP using Resend
+// Step 1: Validate email before registration
 const sendOTP = asyncHandler(async (req, res) => {
     const { email } = req.body;
     if (!email) throw new ApiError(400, "Email is required");
@@ -155,35 +152,61 @@ const sendOTP = asyncHandler(async (req, res) => {
     const userExists = await User.findOne({ email });
     if (userExists) throw new ApiError(409, "User already exists");
 
-    const otp = generateOtp();
-    otpStore[email] = { otp, expiresAt: Date.now() + 10 * 60 * 1000 };
-
-    // Send OTP using Resend
-    const subject = "Your Unique Fitness OTP";
-    const html = `<h2>Your OTP is ${otp}</h2><p>Expires in 10 minutes.</p>`;
-        await sendEmail(email, subject, html);
-
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "OTP sent successfully"));
+        .json(new ApiResponse(200, {}, "Email validated. Provide a b1 token to continue registration."));
 });
 
 
-// Step 2: Verify OTP
+// Step 2: Verify admin-issued token (accepts b1 or b2)
 const verifyOTP = asyncHandler(async (req, res) => {
-    const { email, otp } = req.body;
-    if (!email || !otp) throw new ApiError(400, "Email and OTP are required!");
+    const { email, token } = req.body;
+    if (!email || !token) throw new ApiError(400, "Email and token are required!");
 
-    const storedOtpData = otpStore[email];
-    if (!storedOtpData) throw new ApiError(400, "No OTP found for this email");
-    if (storedOtpData.otp !== otp) throw new ApiError(400, "Invalid OTP");
-    if (Date.now() > storedOtpData.expiresAt) throw new ApiError(400, "OTP expired");
+    const userExists = await User.findOne({ email });
+    if (userExists) throw new ApiError(409, "User already exists");
 
-    delete otpStore[email];
+    const hexToken = await HexToken.findOne({
+        token,
+        prefix: { $in: ["b1", "b2"] },
+        isUsed: false,
+    });
 
-    const signupToken = jwt.sign({ email }, process.env.SIGNUP_TOKEN_SECRET, { expiresIn: "30m" });
+    if (!hexToken) {
+        throw new ApiError(400, "Invalid or already used token");
+    }
 
-    return res.status(200).json(new ApiResponse(200, { signupToken }, "OTP verified successfully"));
+    const existingReservedFor = typeof hexToken.metadata?.get === "function"
+        ? hexToken.metadata.get("reservedFor")
+        : hexToken.metadata?.reservedFor;
+
+    const existingSignupIssuedAt = typeof hexToken.metadata?.get === "function"
+        ? hexToken.metadata.get("signupTokenIssuedAt")
+        : hexToken.metadata?.signupTokenIssuedAt;
+
+    if (existingReservedFor || existingSignupIssuedAt) {
+        throw new ApiError(400, "Token already consumed for signup. Request a new token.");
+    }
+
+    const signupToken = jwt.sign(
+        { email, hexTokenId: hexToken._id.toString(), tokenPrefix: hexToken.prefix },
+        process.env.SIGNUP_TOKEN_SECRET,
+        { expiresIn: "30m" }
+    );
+
+    await HexToken.updateOne(
+        { _id: hexToken._id },
+        {
+            $set: {
+                "metadata.reservedFor": email,
+                "metadata.signupTokenIssuedAt": new Date(),
+                "metadata.signupTokenPrefix": hexToken.prefix,
+                "metadata.signupOriginalPurpose": hexToken.purpose,
+            },
+        }
+    );
+
+    return res.status(200).json(new ApiResponse(200, { signupToken }, "Registration token verified successfully"));
 });
 
 //step 3: registering the user
@@ -197,7 +220,31 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(401, "Invalid or expired signup token");
     }
 
-    const email = decoded.email;
+    const { email, hexTokenId, tokenPrefix } = decoded || {};
+    if (!email || !hexTokenId) {
+        throw new ApiError(400, "Signup token payload is invalid");
+    }
+
+    const hexToken = await HexToken.findOne({
+        _id: hexTokenId,
+        prefix: { $in: ["b1", "b2"] },
+    });
+
+    if (!hexToken) {
+        throw new ApiError(400, "Registration token not found");
+    }
+
+    if (hexToken.isUsed) {
+        throw new ApiError(400, "Registration token already used");
+    }
+
+    const reservedFor = typeof hexToken.metadata?.get === "function"
+        ? hexToken.metadata.get("reservedFor")
+        : hexToken.metadata?.reservedFor;
+
+    if (reservedFor && reservedFor !== email) {
+        throw new ApiError(400, "Registration token reserved for another email");
+    }
 
     const requiredFields = ["fullName", "password", "phone", "height", "weight", "gender", "dob", "address"];
     for (const field of requiredFields) {
@@ -297,6 +344,21 @@ const registerUser = asyncHandler(async (req, res) => {
     });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+    await HexToken.updateOne(
+        { _id: hexToken._id },
+        {
+            $set: {
+                isUsed: true,
+                usedBy: user._id,
+                usedAt: new Date(),
+                "metadata.registeredEmail": email,
+                "metadata.registrationCompletedAt": new Date(),
+                "metadata.registrationTokenPrefix": hexToken.prefix,
+                "metadata.registrationOriginalPurpose": hexToken.purpose,
+            },
+        }
+    );
 
     return res.status(201).json(
         new ApiResponse(201, {
@@ -573,78 +635,56 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
     if (!email) throw new ApiError(400, "Email is required");
 
-    // Check if the user exists
     const user = await User.findOne({ email });
     if (!user) throw new ApiError(404, "User not found");
 
-
-        // Generate OTP
-        const otp = generateOtp();
-        // Update the user document directly without full validation
-        const updatedUser = await User.findOneAndUpdate(
-            { email },
-            {
-                $set: {
-                    emailOTP: otp,
-                    OTPExpiry: Date.now() + 10 * 60 * 1000, // 10 mins expiry
-                },
-            },
-            { new: true } // Return the updated document
-        );
-
-        // If the update was not successful for some reason
-        if (!updatedUser) {
-            throw new ApiError(500, "Failed to update user for password reset");
-        }
-
-        // Send Email using Resend
-        const subject = "Your Unique Fitness OTP";
-        const html = `<h2>Your OTP is ${otp}</h2><p>Expires in 10 minutes.</p>`;
-        await sendEmail(email, subject, html);
-
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "OTP sent to your email for password reset"));
+        .json(new ApiResponse(200, {}, "Request any active hex token (b1 or b2) from an admin to reset your password."));
 });
 
 const resetPassword = asyncHandler(async (req, res) => {
-  const { email, otp, newPassword } = req.body;
+    const { email, token, newPassword } = req.body;
 
-  if (!email || !otp || !newPassword) {
-    throw new ApiError(400, "Email, OTP, and new password are required");
-  }
+    if (!email || !token || !newPassword) {
+        throw new ApiError(400, "Email, token, and new password are required");
+    }
 
-  // 🔎 Find user (document, not plain object)
-  const user = await User.findOne({ email });
-  if (!user) throw new ApiError(404, "User not found");
+    const user = await User.findOne({ email });
+    if (!user) throw new ApiError(404, "User not found");
 
-  // ✅ Verify OTP
-  if (!user.emailOTP || !user.OTPExpiry) {
-    throw new ApiError(400, "No OTP request found for this email");
-  }
+    const hexToken = await HexToken.findOne({
+        token,
+        prefix: { $in: ["b1", "b2"] },
+        isUsed: false,
+    });
 
-  if (Date.now() > user.OTPExpiry) {
-    throw new ApiError(400, "OTP expired");
-  }
+    if (!hexToken) {
+        throw new ApiError(400, "Invalid or already used token");
+    }
 
-  if (user.emailOTP !== otp) {
-    throw new ApiError(400, "Invalid OTP");
-  }
+    user.password = newPassword;
+    user.markModified("password");
+    await user.save();
 
-  // ✅ Assign new password (do NOT hash manually)
-  user.password = newPassword;
-  user.markModified("password");
+    await HexToken.updateOne(
+        { _id: hexToken._id },
+        {
+            $set: {
+                isUsed: true,
+                usedBy: user._id,
+                usedAt: new Date(),
+                "metadata.resetScope": "user",
+                "metadata.email": email,
+                "metadata.resetTokenPrefix": hexToken.prefix,
+                "metadata.resetOriginalPurpose": hexToken.purpose,
+            },
+        }
+    );
 
-  // Clear OTP
-  user.emailOTP = undefined;
-  user.OTPExpiry = undefined;
-
-  // ✅ Call save() (triggers pre('save') hook)
-  await user.save();
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Password reset successfully"));
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Password reset successfully"));
 });
 
 const getWeightHistory = asyncHandler(async (req, res) => {

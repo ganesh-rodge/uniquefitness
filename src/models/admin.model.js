@@ -21,12 +21,6 @@ const AdminSchema = new mongoose.Schema({
         enum: ["admin"],
         default: "admin"
     },
-    emailOTP: {
-        type: String
-    },
-    OTPExpiry: {
-        type: Date
-    },
     gymLogoUrl:{
         type: String
     },
