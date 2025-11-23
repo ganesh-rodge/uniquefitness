@@ -1,12 +1,19 @@
 // Admin-only: Create a new user (no OTP, no signup token)
+const ALLOWED_BRANCHES_FOR_MEMBERS = ["b1", "b2"];
+
 const adminCreateUser = asyncHandler(async (req, res) => {
     // Only allow if req.user is admin (enforce in route)
-    const requiredFields = ["fullName", "email", "password", "phone", "height", "weight", "gender", "dob", "address"];
+    const requiredFields = ["fullName", "email", "password", "phone", "height", "weight", "gender", "dob", "address", "branch"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
     }
 
     const { fullName, email, password, phone, height, weight, gender, dob, address } = req.body;
+    const normalizedBranch = req.body.branch?.trim().toLowerCase();
+
+    if (!ALLOWED_BRANCHES_FOR_MEMBERS.includes(normalizedBranch)) {
+        throw new ApiError(400, "Invalid branch. Allowed values are b1 or b2");
+    }
 
     // Check for duplicate email
     const userExists = await User.findOne({ email });
@@ -76,11 +83,12 @@ const adminCreateUser = asyncHandler(async (req, res) => {
       Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
     );
 
-    const user = await User.create({
+    let user = await User.create({
         fullName,
         email,
         phone,
         password,
+        branch: hexToken.prefix,
         isEmailVerified: true,
         height,
         weight,
@@ -91,6 +99,14 @@ const adminCreateUser = asyncHandler(async (req, res) => {
         livePhotoUrl: livePhotoUpload.url,
         customWorkoutSchedule: lowerCaseSplit
     });
+
+    if (!user.branch) {
+        user = await User.findByIdAndUpdate(
+            user._id,
+            { branch: hexToken.prefix },
+            { new: true }
+        );
+    }
 
     // Log activity for admin-created member
     const { logActivity } = await import("../utils/activityLogger.js");
@@ -246,6 +262,16 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Registration token reserved for another email");
     }
 
+    const normalizedBranch = tokenPrefix || hexToken.prefix;
+    if (!normalizedBranch || !ALLOWED_BRANCHES_FOR_MEMBERS.includes(normalizedBranch)) {
+        throw new ApiError(400, "Unable to determine member branch from token");
+    }
+
+    const requestedBranch = req.body.branch?.trim().toLowerCase();
+    if (requestedBranch && requestedBranch !== normalizedBranch) {
+        throw new ApiError(400, "Branch must match the token prefix");
+    }
+
     const requiredFields = ["fullName", "password", "phone", "height", "weight", "gender", "dob", "address"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
@@ -317,11 +343,12 @@ const registerUser = asyncHandler(async (req, res) => {
       Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
     );
 
-    const user = await User.create({
+    let user = await User.create({
         fullName,
         email,
         phone,
         password,
+        branch: normalizedBranch,
         isEmailVerified: true,
         height,
         weight,
@@ -333,15 +360,23 @@ const registerUser = asyncHandler(async (req, res) => {
         customWorkoutSchedule: lowerCaseSplit
     });
 
+    if (!user.branch) {
+        user = await User.findByIdAndUpdate(
+            user._id,
+            { branch: normalizedBranch },
+            { new: true }
+        );
+    }
+
     // Log activity for new member creation
-    const { logActivity } = await import("../utils/activityLogger.js");
-    await logActivity({
-      actor: user._id, // The new user's id
-      action: "created member",
-      resourceType: "member",
-      resourceId: user._id,
-      metadata: { fullName, email, phone }
-    });
+        const { logActivity } = await import("../utils/activityLogger.js");
+        await logActivity({
+            actor: user._id, // The new user's id
+            action: "created member",
+            resourceType: "member",
+            resourceId: user._id,
+            metadata: { fullName, email, phone, branch: normalizedBranch }
+        });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 

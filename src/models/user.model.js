@@ -94,6 +94,11 @@ weightHistory:[
     },
     refreshToken: {
         type: String
+    },
+    branch: {
+        type: String,
+        enum: ['b1', 'b2'],
+        default: null
     }
 }, { timestamps: true });
 

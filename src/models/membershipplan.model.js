@@ -5,6 +5,7 @@ const membershipPlanSchema = new mongoose.Schema({
     price: { type: Number, required: true },
     duration: { type: Number, required: true }, // in months
     status: { type: String, enum: ["active", "inactive"], default: "active" },
+    branch: { type: String, enum: ["b1", "b2"], required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
     createdAt: { type: Date, default: Date.now }
 });
