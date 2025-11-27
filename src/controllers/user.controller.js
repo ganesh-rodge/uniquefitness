@@ -1,23 +1,51 @@
+import { User } from "../models/user.model.js";
+import { ApiError } from "../utils/ApiError.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import jwt from "jsonwebtoken";
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
+import { MembershipPlan } from "../models/membershipplan.model.js";
+
 // Admin-only: Create a new user (no OTP, no signup token)
 const ALLOWED_BRANCHES_FOR_MEMBERS = ["b1", "b2"];
+const BRANCH_ALIAS_MAP = {
+    b1: "b1",
+    b2: "b2",
+    b14c: "b1",
+    b25v: "b2"
+};
+
+const resolveBranch = (branchValue) => {
+    if (!branchValue) return null;
+    const normalizedInput = branchValue.toString().trim().toLowerCase();
+    const normalizedBranch = BRANCH_ALIAS_MAP[normalizedInput];
+    return ALLOWED_BRANCHES_FOR_MEMBERS.includes(normalizedBranch) ? normalizedBranch : null;
+};
 
 const adminCreateUser = asyncHandler(async (req, res) => {
     // Only allow if req.user is admin (enforce in route)
-    const requiredFields = ["fullName", "email", "password", "phone", "height", "weight", "gender", "dob", "address", "branch"];
+    const requiredFields = ["fullName", "username", "email", "password", "phone", "height", "weight", "gender", "dob", "address", "branch"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
     }
 
-    const { fullName, email, password, phone, height, weight, gender, dob, address } = req.body;
-    const normalizedBranch = req.body.branch?.trim().toLowerCase();
+    const { fullName, username, email, password, phone, height, weight, gender, dob, address } = req.body;
+    const normalizedBranch = resolveBranch(req.body.branch);
 
-    if (!ALLOWED_BRANCHES_FOR_MEMBERS.includes(normalizedBranch)) {
+    const sanitizedUsername = username?.toString().trim();
+    if (!sanitizedUsername) {
+        throw new ApiError(400, "Username is required");
+    }
+
+    if (!normalizedBranch) {
         throw new ApiError(400, "Invalid branch. Allowed values are b1 or b2");
     }
 
     // Check for duplicate email
-    const userExists = await User.findOne({ email });
-    if (userExists) throw new ApiError(409, "User already exists with this email");
+    const userExists = await User.findOne({
+        $or: [{ email }, { username: sanitizedUsername }]
+    });
+    if (userExists) throw new ApiError(409, "User already exists with this email or username");
 
     const aadhaarBuffer = req.files?.aadhaarPhoto?.[0]?.buffer;
     const livePhotoBuffer = req.files?.livePhoto?.[0]?.buffer;
@@ -85,10 +113,11 @@ const adminCreateUser = asyncHandler(async (req, res) => {
 
     let user = await User.create({
         fullName,
+        username: sanitizedUsername,
         email,
         phone,
         password,
-        branch: hexToken.prefix,
+        branch: normalizedBranch,
         isEmailVerified: true,
         height,
         weight,
@@ -100,14 +129,6 @@ const adminCreateUser = asyncHandler(async (req, res) => {
         customWorkoutSchedule: lowerCaseSplit
     });
 
-    if (!user.branch) {
-        user = await User.findByIdAndUpdate(
-            user._id,
-            { branch: hexToken.prefix },
-            { new: true }
-        );
-    }
-
     // Log activity for admin-created member
     const { logActivity } = await import("../utils/activityLogger.js");
     await logActivity({
@@ -115,7 +136,7 @@ const adminCreateUser = asyncHandler(async (req, res) => {
       action: "admin created member",
       resourceType: "member",
       resourceId: user._id,
-      metadata: { fullName, email, phone }
+            metadata: { fullName, username: sanitizedUsername, email, phone }
     });
 
     return res.status(201).json(
@@ -128,13 +149,6 @@ const adminCreateUser = asyncHandler(async (req, res) => {
         }, "User created successfully by admin")
     );
 });
-import { User } from "../models/user.model.js"
-import { HexToken } from "../models/hexToken.model.js";
-import { ApiError } from "../utils/ApiError.js"
-import {ApiResponse} from "../utils/ApiResponse.js"
-import {asyncHandler} from "../utils/asyncHandler.js"
-import jwt from "jsonwebtoken"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
 
 //Generating the tokens
 const generateAccessAndRefreshToken = async (userId) =>{
@@ -160,124 +174,41 @@ const generateAccessAndRefreshToken = async (userId) =>{
 
 
 
-// Step 1: Validate email before registration
-const sendOTP = asyncHandler(async (req, res) => {
-    const { email } = req.body;
+// Registering the user (branch derived from URL/query/body)
+const registerUser = asyncHandler(async (req, res) => {
+    const {
+        email,
+        fullName,
+        username,
+        password,
+        phone,
+        height,
+        weight,
+        gender,
+        dob,
+        address,
+    } = req.body;
+
     if (!email) throw new ApiError(400, "Email is required");
 
-    const userExists = await User.findOne({ email });
-    if (userExists) throw new ApiError(409, "User already exists");
+    const sanitizedUsername = username?.toString().trim();
+    if (!sanitizedUsername) throw new ApiError(400, "Username is required");
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, {}, "Email validated. Provide a b1 token to continue registration."));
-});
-
-
-// Step 2: Verify admin-issued token (accepts b1 or b2)
-const verifyOTP = asyncHandler(async (req, res) => {
-    const { email, token } = req.body;
-    if (!email || !token) throw new ApiError(400, "Email and token are required!");
-
-    const userExists = await User.findOne({ email });
-    if (userExists) throw new ApiError(409, "User already exists");
-
-    const hexToken = await HexToken.findOne({
-        token,
-        prefix: { $in: ["b1", "b2"] },
-        isUsed: false,
+    const existingUser = await User.findOne({
+        $or: [{ email }, { username: sanitizedUsername }]
     });
+    if (existingUser) throw new ApiError(409, "User already exists with this email or username");
 
-    if (!hexToken) {
-        throw new ApiError(400, "Invalid or already used token");
+    const branchCandidate = req.query.branch || req.body.branch || req.body.branchCode;
+    const normalizedBranch = resolveBranch(branchCandidate);
+    if (!normalizedBranch) {
+        throw new ApiError(400, "Invalid branch. Allowed values are b1 or b2");
     }
 
-    const existingReservedFor = typeof hexToken.metadata?.get === "function"
-        ? hexToken.metadata.get("reservedFor")
-        : hexToken.metadata?.reservedFor;
-
-    const existingSignupIssuedAt = typeof hexToken.metadata?.get === "function"
-        ? hexToken.metadata.get("signupTokenIssuedAt")
-        : hexToken.metadata?.signupTokenIssuedAt;
-
-    if (existingReservedFor || existingSignupIssuedAt) {
-        throw new ApiError(400, "Token already consumed for signup. Request a new token.");
-    }
-
-    const signupToken = jwt.sign(
-        { email, hexTokenId: hexToken._id.toString(), tokenPrefix: hexToken.prefix },
-        process.env.SIGNUP_TOKEN_SECRET,
-        { expiresIn: "30m" }
-    );
-
-    await HexToken.updateOne(
-        { _id: hexToken._id },
-        {
-            $set: {
-                "metadata.reservedFor": email,
-                "metadata.signupTokenIssuedAt": new Date(),
-                "metadata.signupTokenPrefix": hexToken.prefix,
-                "metadata.signupOriginalPurpose": hexToken.purpose,
-            },
-        }
-    );
-
-    return res.status(200).json(new ApiResponse(200, { signupToken }, "Registration token verified successfully"));
-});
-
-//step 3: registering the user
-const registerUser = asyncHandler(async (req, res) => {
-    const { signupToken } = req.body;
-
-    let decoded;
-    try {
-        decoded = jwt.verify(signupToken, process.env.SIGNUP_TOKEN_SECRET);
-    } catch {
-        throw new ApiError(401, "Invalid or expired signup token");
-    }
-
-    const { email, hexTokenId, tokenPrefix } = decoded || {};
-    if (!email || !hexTokenId) {
-        throw new ApiError(400, "Signup token payload is invalid");
-    }
-
-    const hexToken = await HexToken.findOne({
-        _id: hexTokenId,
-        prefix: { $in: ["b1", "b2"] },
-    });
-
-    if (!hexToken) {
-        throw new ApiError(400, "Registration token not found");
-    }
-
-    if (hexToken.isUsed) {
-        throw new ApiError(400, "Registration token already used");
-    }
-
-    const reservedFor = typeof hexToken.metadata?.get === "function"
-        ? hexToken.metadata.get("reservedFor")
-        : hexToken.metadata?.reservedFor;
-
-    if (reservedFor && reservedFor !== email) {
-        throw new ApiError(400, "Registration token reserved for another email");
-    }
-
-    const normalizedBranch = tokenPrefix || hexToken.prefix;
-    if (!normalizedBranch || !ALLOWED_BRANCHES_FOR_MEMBERS.includes(normalizedBranch)) {
-        throw new ApiError(400, "Unable to determine member branch from token");
-    }
-
-    const requestedBranch = req.body.branch?.trim().toLowerCase();
-    if (requestedBranch && requestedBranch !== normalizedBranch) {
-        throw new ApiError(400, "Branch must match the token prefix");
-    }
-
-    const requiredFields = ["fullName", "password", "phone", "height", "weight", "gender", "dob", "address"];
+    const requiredFields = ["fullName", "username", "password", "phone", "height", "weight", "gender", "dob", "address"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
     }
-
-    const { fullName, password, phone, height, weight, gender, dob, address } = req.body;
 
     const aadhaarBuffer = req.files?.aadhaarPhoto?.[0]?.buffer;
     const livePhotoBuffer = req.files?.livePhoto?.[0]?.buffer;
@@ -340,11 +271,12 @@ const registerUser = asyncHandler(async (req, res) => {
     // Pick a random split and standardize keys to lowercase
     const randomSplit = workoutSplits[Math.floor(Math.random() * workoutSplits.length)];
     const lowerCaseSplit = Object.fromEntries(
-      Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
+        Object.entries(randomSplit).map(([day, val]) => [day.toLowerCase(), val])
     );
 
-    let user = await User.create({
+    const user = await User.create({
         fullName,
+        username: sanitizedUsername,
         email,
         phone,
         password,
@@ -360,40 +292,17 @@ const registerUser = asyncHandler(async (req, res) => {
         customWorkoutSchedule: lowerCaseSplit
     });
 
-    if (!user.branch) {
-        user = await User.findByIdAndUpdate(
-            user._id,
-            { branch: normalizedBranch },
-            { new: true }
-        );
-    }
-
     // Log activity for new member creation
-        const { logActivity } = await import("../utils/activityLogger.js");
-        await logActivity({
-            actor: user._id, // The new user's id
-            action: "created member",
-            resourceType: "member",
-            resourceId: user._id,
-            metadata: { fullName, email, phone, branch: normalizedBranch }
-        });
+    const { logActivity } = await import("../utils/activityLogger.js");
+    await logActivity({
+        actor: user._id,
+        action: "created member",
+        resourceType: "member",
+        resourceId: user._id,
+        metadata: { fullName, username: sanitizedUsername, email, phone, branch: normalizedBranch }
+    });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
-
-    await HexToken.updateOne(
-        { _id: hexToken._id },
-        {
-            $set: {
-                isUsed: true,
-                usedBy: user._id,
-                usedAt: new Date(),
-                "metadata.registeredEmail": email,
-                "metadata.registrationCompletedAt": new Date(),
-                "metadata.registrationTokenPrefix": hexToken.prefix,
-                "metadata.registrationOriginalPurpose": hexToken.purpose,
-            },
-        }
-    );
 
     return res.status(201).json(
         new ApiResponse(201, {
@@ -409,13 +318,22 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res)=>{
-    const {email, password} = req.body
+    const { email, username, password } = req.body;
 
-    if(!email || !password) throw new ApiError(400, "Email and password are required !")
+    if(!password) throw new ApiError(400, "Password is required!");
+    if(!email && !username) throw new ApiError(400, "Email or username is required!");
 
-    const user = await User.findOne({email})
+    const normalizedEmail = email?.toString().trim();
+    const normalizedUsername = username?.toString().trim();
 
-    if(!user) throw new ApiError(404, "User not found !")
+    const user = await User.findOne({
+        $or: [
+            normalizedEmail ? { email: normalizedEmail } : null,
+            normalizedUsername ? { username: normalizedUsername } : null
+        ].filter(Boolean)
+    }).collation({ locale: "en", strength: 2 });
+
+    if(!user) throw new ApiError(404, "User not found !");
 
     const isPasswordValid = await user.isPasswordCorrect(password)
 
@@ -675,47 +593,29 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "Request any active hex token (b1 or b2) from an admin to reset your password."));
+        .json(new ApiResponse(200, {}, "Email validated. Provide the reset secret code to authorize the reset."));
 });
 
 const resetPassword = asyncHandler(async (req, res) => {
-    const { email, token, newPassword } = req.body;
+    const { email, newPassword, secretCode } = req.body;
 
-    if (!email || !token || !newPassword) {
-        throw new ApiError(400, "Email, token, and new password are required");
+    if (!email || !newPassword || !secretCode) {
+        throw new ApiError(400, "Email, new password, and reset secret code are required");
     }
 
-    const user = await User.findOne({ email });
+    const sanitizedEmail = email.toString().trim();
+
+    if (secretCode !== "amitkanse22") {
+        throw new ApiError(401, "Invalid reset secret code");
+    }
+
+    const user = await User.findOne({ email: sanitizedEmail })
+        .collation({ locale: "en", strength: 2 });
     if (!user) throw new ApiError(404, "User not found");
-
-    const hexToken = await HexToken.findOne({
-        token,
-        prefix: { $in: ["b1", "b2"] },
-        isUsed: false,
-    });
-
-    if (!hexToken) {
-        throw new ApiError(400, "Invalid or already used token");
-    }
 
     user.password = newPassword;
     user.markModified("password");
     await user.save();
-
-    await HexToken.updateOne(
-        { _id: hexToken._id },
-        {
-            $set: {
-                isUsed: true,
-                usedBy: user._id,
-                usedAt: new Date(),
-                "metadata.resetScope": "user",
-                "metadata.email": email,
-                "metadata.resetTokenPrefix": hexToken.prefix,
-                "metadata.resetOriginalPurpose": hexToken.purpose,
-            },
-        }
-    );
 
     return res
         .status(200)
@@ -729,8 +629,6 @@ const getWeightHistory = asyncHandler(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(200, user.weightHistory, "Weight history fetched successfully"));
 });
-
-import { MembershipPlan } from "../models/membershipplan.model.js";
 
 const linkMembershipToUser = asyncHandler(async (req, res) => {
     const { planId } = req.body;
@@ -764,8 +662,6 @@ const linkMembershipToUser = asyncHandler(async (req, res) => {
 
 export {
     generateAccessAndRefreshToken,
-    sendOTP,
-    verifyOTP,
     registerUser,
     adminCreateUser,
     loginUser,

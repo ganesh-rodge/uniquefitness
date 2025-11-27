@@ -18,9 +18,7 @@ import {
     updateDietPlan,
     deleteDietPlan,
     getAllDietPlans,
-    getRecentActivities,
-    generateB1HexToken,
-    generateB2HexToken
+    getRecentActivities
 } from "../controllers/admin.controller.js";
 import { adminCreateUser } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -56,9 +54,6 @@ router.get("/reports", verifyJWT, adminReports); // Optional
 
 // Recent Activities
 router.get("/activities", verifyJWT, verifyAdmin, getRecentActivities);
-
-router.get("/hex-tokens/b1", verifyJWT, verifyAdmin, generateB1HexToken);
-router.get("/hex-tokens/b2", verifyJWT, verifyAdmin, generateB2HexToken);
 
 
 router.post("/create-user", verifyJWT, verifyAdmin, upload.fields([

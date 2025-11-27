@@ -1,19 +1,12 @@
 import express from "express";
-import { sendOTP, verifyOTP, registerUser, loginUser, logoutUser, updateLivePhoto, getCurrentUser, refreshAccessToken, changeCurrentPassword, updateAccountDetails, updateWeight, forgotPassword, getWeightHistory, linkMembershipToUser } from "../controllers/user.controller.js";
+import { registerUser, loginUser, logoutUser, updateLivePhoto, getCurrentUser, refreshAccessToken, changeCurrentPassword, updateAccountDetails, updateWeight, forgotPassword, resetPassword, getWeightHistory, linkMembershipToUser } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js"; // for Aadhaar & live photo upload
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { resetPassword } from "../controllers/user.controller.js";
 
 
 const router = express.Router();
 
-// Step 1: Validate email (no email sent)
-router.post("/send-otp", sendOTP);
-
-// Step 2: Verify admin-issued b1/b2 token and return signup token
-router.post("/verify-otp", verifyOTP);
-
-// Step 3: Register user (needs signupToken from step 2)
+// Register user (branch derived from request)
 router.post(
   "/register",
   upload.fields([
