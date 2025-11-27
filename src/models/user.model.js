@@ -39,6 +39,12 @@ const userSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    purpose: {
+        type: String,
+        enum: ["gain", "loose", "maintain"],
+        required: true,
+        trim: true
+    },
     address: {
         type: String,
         required: true

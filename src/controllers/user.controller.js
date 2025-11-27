@@ -15,6 +15,8 @@ const BRANCH_ALIAS_MAP = {
     b25v: "b2"
 };
 
+const ALLOWED_PURPOSES = ["gain", "loose", "maintain"];
+
 const resolveBranch = (branchValue) => {
     if (!branchValue) return null;
     const normalizedInput = branchValue.toString().trim().toLowerCase();
@@ -22,19 +24,30 @@ const resolveBranch = (branchValue) => {
     return ALLOWED_BRANCHES_FOR_MEMBERS.includes(normalizedBranch) ? normalizedBranch : null;
 };
 
+const resolvePurpose = (purposeValue) => {
+    if (!purposeValue) return null;
+    const normalizedPurpose = purposeValue.toString().trim().toLowerCase();
+    return ALLOWED_PURPOSES.includes(normalizedPurpose) ? normalizedPurpose : null;
+};
+
 const adminCreateUser = asyncHandler(async (req, res) => {
     // Only allow if req.user is admin (enforce in route)
-    const requiredFields = ["fullName", "username", "email", "password", "phone", "height", "weight", "gender", "dob", "address", "branch"];
+    const requiredFields = ["fullName", "username", "email", "password", "phone", "height", "weight", "purpose", "gender", "dob", "address", "branch"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
     }
 
-    const { fullName, username, email, password, phone, height, weight, gender, dob, address } = req.body;
+    const { fullName, username, email, password, phone, height, weight, purpose, gender, dob, address } = req.body;
     const normalizedBranch = resolveBranch(req.body.branch);
 
     const sanitizedUsername = username?.toString().trim();
     if (!sanitizedUsername) {
         throw new ApiError(400, "Username is required");
+    }
+
+    const normalizedPurpose = resolvePurpose(purpose);
+    if (!normalizedPurpose) {
+        throw new ApiError(400, "Invalid purpose. Allowed values are gain, loose, maintain");
     }
 
     if (!normalizedBranch) {
@@ -119,6 +132,7 @@ const adminCreateUser = asyncHandler(async (req, res) => {
         password,
         branch: normalizedBranch,
         isEmailVerified: true,
+        purpose: normalizedPurpose,
         height,
         weight,
         gender,
@@ -136,7 +150,7 @@ const adminCreateUser = asyncHandler(async (req, res) => {
       action: "admin created member",
       resourceType: "member",
       resourceId: user._id,
-            metadata: { fullName, username: sanitizedUsername, email, phone }
+            metadata: { fullName, username: sanitizedUsername, email, phone, purpose: normalizedPurpose }
     });
 
     return res.status(201).json(
@@ -184,6 +198,7 @@ const registerUser = asyncHandler(async (req, res) => {
         phone,
         height,
         weight,
+        purpose,
         gender,
         dob,
         address,
@@ -193,6 +208,9 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const sanitizedUsername = username?.toString().trim();
     if (!sanitizedUsername) throw new ApiError(400, "Username is required");
+
+    const normalizedPurpose = resolvePurpose(purpose);
+    if (!normalizedPurpose) throw new ApiError(400, "Invalid purpose. Allowed values are gain, loose, maintain");
 
     const existingUser = await User.findOne({
         $or: [{ email }, { username: sanitizedUsername }]
@@ -205,7 +223,7 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid branch. Allowed values are b1 or b2");
     }
 
-    const requiredFields = ["fullName", "username", "password", "phone", "height", "weight", "gender", "dob", "address"];
+    const requiredFields = ["fullName", "username", "purpose", "password", "phone", "height", "weight", "gender", "dob", "address"];
     for (const field of requiredFields) {
         if (!req.body[field]) throw new ApiError(400, `${field} is required`);
     }
@@ -282,6 +300,7 @@ const registerUser = asyncHandler(async (req, res) => {
         password,
         branch: normalizedBranch,
         isEmailVerified: true,
+        purpose: normalizedPurpose,
         height,
         weight,
         gender,
@@ -299,7 +318,7 @@ const registerUser = asyncHandler(async (req, res) => {
         action: "created member",
         resourceType: "member",
         resourceId: user._id,
-        metadata: { fullName, username: sanitizedUsername, email, phone, branch: normalizedBranch }
+        metadata: { fullName, username: sanitizedUsername, email, phone, purpose: normalizedPurpose, branch: normalizedBranch }
     });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);

@@ -14,9 +14,12 @@ const PlanItemSchema = new mongoose.Schema({
   nutrition: { type: NutritionSchema, required: true },
 }, { _id: false });
 
+const PURPOSE_OPTIONS = ["gain", "loose", "maintain"];
+const CATEGORY_OPTIONS = ["eggetarian", "vegetarian", "non-vegetarian"];
+
 const DietPlanSchema = new mongoose.Schema({
-  purpose: { type: String, required: true },
-  category: { type: String, required: true },
+  purpose: { type: String, required: true, enum: PURPOSE_OPTIONS },
+  category: { type: String, required: true, enum: CATEGORY_OPTIONS },
   plan: { type: [PlanItemSchema], required: true },
 }, { timestamps: true });
 
