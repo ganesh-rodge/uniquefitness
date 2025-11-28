@@ -16,6 +16,18 @@ const BRANCH_ALIAS_MAP = {
 };
 
 const ALLOWED_PURPOSES = ["gain", "loose", "maintain"];
+const REQUIRED_USER_FIELDS = [
+    "fullName",
+    "username",
+    "purpose",
+    "password",
+    "phone",
+    "height",
+    "weight",
+    "gender",
+    "dob",
+    "address"
+];
 
 const resolveBranch = (branchValue) => {
     if (!branchValue) return null;
@@ -30,33 +42,78 @@ const resolvePurpose = (purposeValue) => {
     return ALLOWED_PURPOSES.includes(normalizedPurpose) ? normalizedPurpose : null;
 };
 
-const adminCreateUser = asyncHandler(async (req, res) => {
-    // Only allow if req.user is admin (enforce in route)
-    const requiredFields = ["fullName", "username", "email", "password", "phone", "height", "weight", "purpose", "gender", "dob", "address", "branch"];
-    for (const field of requiredFields) {
-        if (!req.body[field]) throw new ApiError(400, `${field} is required`);
-    }
+const extractValidatedUserPayload = (req) => {
+    const {
+        email,
+        fullName,
+        username,
+        password,
+        phone,
+        height,
+        weight,
+        purpose,
+        gender,
+        dob,
+        address
+    } = req.body;
 
-    const { fullName, username, email, password, phone, height, weight, purpose, gender, dob, address } = req.body;
-    const normalizedBranch = resolveBranch(req.body.branch);
+    if (!email) throw new ApiError(400, "Email is required");
+
+    REQUIRED_USER_FIELDS.forEach((field) => {
+        if (!req.body[field]) throw new ApiError(400, `${field} is required`);
+    });
+
+    const sanitizedEmail = email.toString().trim();
+    if (!sanitizedEmail) throw new ApiError(400, "Email is required");
 
     const sanitizedUsername = username?.toString().trim();
-    if (!sanitizedUsername) {
-        throw new ApiError(400, "Username is required");
-    }
+    if (!sanitizedUsername) throw new ApiError(400, "Username is required");
 
     const normalizedPurpose = resolvePurpose(purpose);
     if (!normalizedPurpose) {
         throw new ApiError(400, "Invalid purpose. Allowed values are gain, loose, maintain");
     }
 
+    const branchCandidate = req.query.branch || req.body.branch || req.body.branchCode;
+    const normalizedBranch = resolveBranch(branchCandidate);
     if (!normalizedBranch) {
         throw new ApiError(400, "Invalid branch. Allowed values are b1 or b2");
     }
 
-    // Check for duplicate email
+    return {
+        email: sanitizedEmail,
+        fullName,
+        username: sanitizedUsername,
+        password,
+        phone,
+        height,
+        weight,
+        purpose: normalizedPurpose,
+        gender,
+        dob,
+        address,
+        branch: normalizedBranch
+    };
+};
+
+const adminCreateUser = asyncHandler(async (req, res) => {
+    const {
+        email: sanitizedEmail,
+        fullName,
+        username: sanitizedUsername,
+        password,
+        phone,
+        height,
+        weight,
+        purpose: normalizedPurpose,
+        gender,
+        dob,
+        address,
+        branch: normalizedBranch
+    } = extractValidatedUserPayload(req);
+
     const userExists = await User.findOne({
-        $or: [{ email }, { username: sanitizedUsername }]
+        $or: [{ email: sanitizedEmail }, { username: sanitizedUsername }]
     });
     if (userExists) throw new ApiError(409, "User already exists with this email or username");
 
@@ -127,7 +184,7 @@ const adminCreateUser = asyncHandler(async (req, res) => {
     let user = await User.create({
         fullName,
         username: sanitizedUsername,
-        email,
+        email: sanitizedEmail,
         phone,
         password,
         branch: normalizedBranch,
@@ -150,7 +207,7 @@ const adminCreateUser = asyncHandler(async (req, res) => {
       action: "admin created member",
       resourceType: "member",
       resourceId: user._id,
-            metadata: { fullName, username: sanitizedUsername, email, phone, purpose: normalizedPurpose }
+        metadata: { fullName, username: sanitizedUsername, email: sanitizedEmail, phone, purpose: normalizedPurpose, branch: normalizedBranch }
     });
 
     return res.status(201).json(
@@ -191,42 +248,24 @@ const generateAccessAndRefreshToken = async (userId) =>{
 // Registering the user (branch derived from URL/query/body)
 const registerUser = asyncHandler(async (req, res) => {
     const {
-        email,
+        email: sanitizedEmail,
         fullName,
-        username,
+        username: sanitizedUsername,
         password,
         phone,
         height,
         weight,
-        purpose,
+        purpose: normalizedPurpose,
         gender,
         dob,
         address,
-    } = req.body;
-
-    if (!email) throw new ApiError(400, "Email is required");
-
-    const sanitizedUsername = username?.toString().trim();
-    if (!sanitizedUsername) throw new ApiError(400, "Username is required");
-
-    const normalizedPurpose = resolvePurpose(purpose);
-    if (!normalizedPurpose) throw new ApiError(400, "Invalid purpose. Allowed values are gain, loose, maintain");
+        branch: normalizedBranch
+    } = extractValidatedUserPayload(req);
 
     const existingUser = await User.findOne({
-        $or: [{ email }, { username: sanitizedUsername }]
+        $or: [{ email: sanitizedEmail }, { username: sanitizedUsername }]
     });
     if (existingUser) throw new ApiError(409, "User already exists with this email or username");
-
-    const branchCandidate = req.query.branch || req.body.branch || req.body.branchCode;
-    const normalizedBranch = resolveBranch(branchCandidate);
-    if (!normalizedBranch) {
-        throw new ApiError(400, "Invalid branch. Allowed values are b1 or b2");
-    }
-
-    const requiredFields = ["fullName", "username", "purpose", "password", "phone", "height", "weight", "gender", "dob", "address"];
-    for (const field of requiredFields) {
-        if (!req.body[field]) throw new ApiError(400, `${field} is required`);
-    }
 
     const aadhaarBuffer = req.files?.aadhaarPhoto?.[0]?.buffer;
     const livePhotoBuffer = req.files?.livePhoto?.[0]?.buffer;
@@ -295,7 +334,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const user = await User.create({
         fullName,
         username: sanitizedUsername,
-        email,
+        email: sanitizedEmail,
         phone,
         password,
         branch: normalizedBranch,
@@ -318,7 +357,7 @@ const registerUser = asyncHandler(async (req, res) => {
         action: "created member",
         resourceType: "member",
         resourceId: user._id,
-        metadata: { fullName, username: sanitizedUsername, email, phone, purpose: normalizedPurpose, branch: normalizedBranch }
+        metadata: { fullName, username: sanitizedUsername, email: sanitizedEmail, phone, purpose: normalizedPurpose, branch: normalizedBranch }
     });
 
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
