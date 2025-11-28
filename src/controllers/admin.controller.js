@@ -242,6 +242,8 @@ const changeAdminPassword = asyncHandler(async (req, res) => {
 });
 
 // Forgot Password (token-driven flow placeholder)
+const ADMIN_RESET_SECRET = "amitkanseunique2018";
+
 const forgotPasswordAdmin = asyncHandler(async (req, res) => {
     const { email } = req.body;
     if (!email) throw new ApiError(400, "Email is required");
@@ -251,16 +253,21 @@ const forgotPasswordAdmin = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "Email validated. Proceed to reset the password."));
+        .json(new ApiResponse(200, {}, "Email validated. Provide the admin reset secret code to continue."));
 });
 
-// Reset Password (email only)
+// Reset Password (secret-code protected)
 const resetPasswordAdmin = asyncHandler(async (req, res) => {
-    const { email, newPassword } = req.body;
-    if (!email || !newPassword)
-        throw new ApiError(400, "Email and new password are required");
+    const { email, newPassword, secretCode } = req.body;
+    if (!email || !newPassword || !secretCode)
+        throw new ApiError(400, "Email, new password, and admin reset secret code are required");
 
-    const admin = await Admin.findOne({ email });
+    if (secretCode !== ADMIN_RESET_SECRET) {
+        throw new ApiError(401, "Invalid admin reset secret code");
+    }
+
+    const sanitizedEmail = email.toString().trim();
+    const admin = await Admin.findOne({ email: sanitizedEmail }).collation({ locale: "en", strength: 2 });
     if (!admin) throw new ApiError(404, "Admin not found");
 
     admin.password = newPassword;
