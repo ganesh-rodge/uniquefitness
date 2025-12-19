@@ -20,8 +20,6 @@ This repository contains the **backend (Node.js + Express + MongoDB)** APIs that
 - Membership management:
   - Choose plans
   - Renew memberships
-  - Auto-activation after payment
-- **Payment integration** with Razorpay
 - View gym **announcements and notifications**
 
 ### 🛠️ Admin Features
@@ -35,10 +33,6 @@ This repository contains the **backend (Node.js + Express + MongoDB)** APIs that
 - **Workout management** (CRUD with categories + videos)
 - **Diet plan management** (CRUD)
 - **Announcements management** (publish updates to users)
-- **Payments & Reports**:
-  - View revenue
-  - Track payment history
-  - Membership statistics
 
 ---
 
@@ -47,7 +41,6 @@ This repository contains the **backend (Node.js + Express + MongoDB)** APIs that
 - **Backend**: Node.js, Express.js
 - **Database**: MongoDB Atlas (Mongoose ODM)
 - **Authentication**: JWT (Access + Refresh Tokens), bcrypt
-- **Payments**: Razorpay
 - **File Uploads**: Multer + Cloudinary
 - **Email Service**: Nodemailer (for OTP)
 - **Deployment**: Render (Free Tier)
@@ -61,9 +54,9 @@ This repository contains the **backend (Node.js + Express + MongoDB)** APIs that
 ```plaintext
 backend/
 ├── src/
-│   ├── controllers/        # Route controllers (User, Admin, Membership, Payment, etc.)
+│   ├── controllers/        # Route controllers (User, Admin, Membership, etc.)
 │   ├── middlewares/        # Authentication & error handling
-│   ├── models/             # Mongoose models (User, Admin, Membership, Workout, DietPlan, Announcement, Payment)
+│   ├── models/             # Mongoose models (User, Admin, Membership, Workout, DietPlan, Announcement)
 │   ├── routes/             # API routes
 │   ├── utils/              # Utility functions (OTP, Cloudinary, JWT, ApiResponse, etc.)
 │   ├── app.js              # Express app setup
@@ -95,10 +88,6 @@ REFRESH_TOKEN_SECRET=your-refresh-secret
 ACCESS_TOKEN_EXPIRY=15m
 REFRESH_TOKEN_EXPIRY=7d
 
-# Razorpay
-RAZORPAY_KEY_ID=your-razorpay-key-id
-RAZORPAY_KEY_SECRET=your-razorpay-key-secret
-
 # Email (for OTP)
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
@@ -123,7 +112,7 @@ npm install
 3. Setup Environment
 Copy .env.sample to .env
 
-Add your credentials (MongoDB, JWT secrets, Razorpay keys, Email, Cloudinary)
+Add your credentials (MongoDB, JWT secrets, Email, Cloudinary)
 
 4. Run the Server
 ```
@@ -215,21 +204,12 @@ PATCH /:id – Update diet plan
 
 DELETE /:id – Delete diet plan
 
-Payments (/api/v1/payment)
-POST /create-order – Create Razorpay order
-
-POST /verify – Verify payment and activate membership
-
-GET /history/:userId – Get user payment history
-
 ## 📊 Reports & Analytics
 Active Members Count
 
 Expiring Soon Members
 
 Expired Members
-
-Total Revenue
 
 Membership Distribution
 
