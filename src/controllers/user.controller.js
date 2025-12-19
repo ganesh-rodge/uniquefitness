@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 import { MembershipPlan } from "../models/membershipplan.model.js";
+import { determineMembershipStatus } from "../utils/membership.utils.js";
 
 // Admin-only: Create a new user (no OTP, no signup token)
 const ALLOWED_BRANCHES_FOR_MEMBERS = ["b1", "b2"];
@@ -476,17 +477,31 @@ const updateLivePhoto = asyncHandler(async (req, res) => {
 
 const getCurrentUser = asyncHandler(async (req, res) => {
   // Fetch user from DB using id from req.user (set in middleware)
-  const user = await User.findById(req.user?._id).select("-password -refreshToken");
+    const user = await User.findById(req.user?._id).select("-password -refreshToken");
   
 
   if (!user) {
     return res.status(404).json(new ApiResponse(404, null, "User not found"));
   }
 
-  console.log(user)
+    const plainUser = user.toObject();
+    const membership = plainUser.membership || {};
+
+    if (membership.startDate && membership.endDate) {
+        membership.status = determineMembershipStatus(
+            membership.startDate,
+            membership.endDate
+        );
+    }
+
+    const responsePayload = {
+        ...plainUser,
+        membership
+    };
+
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "User information fetched successfully"));
+        .json(new ApiResponse(200, responsePayload, "User information fetched successfully"));
 });
 
 
@@ -697,7 +712,7 @@ const linkMembershipToUser = asyncHandler(async (req, res) => {
 
     const startDate = new Date();
     const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + plan.durationMonths);
+    endDate.setMonth(endDate.getMonth() + plan.duration);
 
     const updatedUser = await User.findByIdAndUpdate(
         userId,

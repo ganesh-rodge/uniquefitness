@@ -63,6 +63,7 @@ const createDietPlan = asyncHandler(async (req, res) => {
     const created = await DietPlan.insertMany(toInsert);
     res.status(201).json({ success: true, data: created });
 });
+import { MembershipPlan } from "../models/membershipplan.model.js";
 import { Admin } from "../models/admin.model.js";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -71,6 +72,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { Activity } from "../models/activity.model.js";
+import { buildMembershipWindow } from "../utils/membership.utils.js";
 
 /** ---------------------------
  * Generate Access Token
@@ -128,12 +130,37 @@ const getAllMembers = asyncHandler(async (req, res) => {
                         $switch: {
                             branches: [
                                 {
-                                    case: { $lt: ["$membership.endDate", now] },
+                                    case: {
+                                        $or: [
+                                            {
+                                                $not: [
+                                                    { $ifNull: ["$membership.planId", false] }
+                                                ]
+                                            },
+                                            { $eq: ["$membership.status", "inactive"] },
+                                            {
+                                                $and: [
+                                                    { $ifNull: ["$membership.startDate", false] },
+                                                    { $gt: ["$membership.startDate", now] }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    then: "inactive"
+                                },
+                                {
+                                    case: {
+                                        $and: [
+                                            { $ifNull: ["$membership.endDate", false] },
+                                            { $lt: ["$membership.endDate", now] }
+                                        ]
+                                    },
                                     then: "expired"
                                 },
                                 {
                                     case: {
                                         $and: [
+                                            { $ifNull: ["$membership.endDate", false] },
                                             { $gte: ["$membership.endDate", now] },
                                             { $lte: ["$membership.endDate", sevenDaysLater] }
                                         ]
@@ -287,16 +314,17 @@ const getSingleMemberById = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, member, "Member fetched successfully"));
 });
 
-const updateMemberMembership = asyncHandler(async (req, res) => {
+const assignMembershipPlan = asyncHandler(async (req, res) => {
     const { memberId } = req.params;
-    const { planId } = req.body;
+    const { planId, startDate: startDateInput } = req.body;
+
+    if (!planId) throw new ApiError(400, "Plan ID is required");
+    if (!startDateInput) throw new ApiError(400, "Membership start date is required");
 
     const plan = await MembershipPlan.findById(planId);
     if (!plan) throw new ApiError(404, "Membership plan not found");
 
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + plan.durationMonths);
+    const { startDate, endDate, status } = buildMembershipWindow(startDateInput, plan.duration);
 
     const updatedMember = await User.findByIdAndUpdate(
         memberId,
@@ -305,11 +333,27 @@ const updateMemberMembership = asyncHandler(async (req, res) => {
                 planId,
                 startDate,
                 endDate,
-                status: 'active'
+                status
             }
         },
-        { new: true }
+        { new: true, runValidators: true }
     ).populate("membership.planId");
+
+    if (!updatedMember) throw new ApiError(404, "User not found");
+
+    const { logActivity } = await import("../utils/activityLogger.js");
+    await logActivity({
+        actor: req.user._id,
+        action: "assigned membership plan",
+        resourceType: "member",
+        resourceId: memberId,
+        metadata: {
+            planId,
+            startDate,
+            endDate,
+            status
+        }
+    });
 
     return res.status(200).json(new ApiResponse(200, updatedMember, "Membership updated successfully"));
 });
@@ -450,7 +494,7 @@ export {
     forgotPasswordAdmin,
     resetPasswordAdmin,
     getSingleMemberById,
-    updateMemberMembership,
+    assignMembershipPlan,
     adminDashboardStats,
     adminReports,
     createDietPlan,
