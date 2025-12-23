@@ -12,6 +12,8 @@ import {
     resetPasswordAdmin,
     getSingleMemberById,
     assignMembershipPlan,
+    updateAssignedMembershipPlan,
+    removeAssignedMembershipPlan,
     adminDashboardStats,
     adminReports,
     createDietPlan,
@@ -49,6 +51,8 @@ router.post("/reset-password", resetPasswordAdmin);
 
 router.get("/member/:memberId", verifyJWT, getSingleMemberById);
 router.post("/member/:memberId/assign-plan", verifyJWT, verifyAdmin, assignMembershipPlan);
+router.patch("/member/:memberId/assign-plan", verifyJWT, verifyAdmin, updateAssignedMembershipPlan);
+router.delete("/member/:memberId/assign-plan", verifyJWT, verifyAdmin, removeAssignedMembershipPlan);
 router.get("/dashboard-stats", verifyJWT, adminDashboardStats);
 router.get("/reports", verifyJWT, adminReports); // Optional
 

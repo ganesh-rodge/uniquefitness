@@ -358,6 +358,86 @@ const assignMembershipPlan = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, updatedMember, "Membership updated successfully"));
 });
 
+const updateAssignedMembershipPlan = asyncHandler(async (req, res) => {
+    const { memberId } = req.params;
+    const { planId: incomingPlanId, startDate: startDateInput } = req.body;
+
+    const member = await User.findById(memberId);
+    if (!member) throw new ApiError(404, "User not found");
+
+    const currentMembership = member.membership || {};
+    const planId = incomingPlanId || currentMembership.planId;
+    if (!planId) throw new ApiError(400, "Plan ID is required");
+
+    const plan = await MembershipPlan.findById(planId);
+    if (!plan) throw new ApiError(404, "Membership plan not found");
+
+    const effectiveStartDateInput = startDateInput || currentMembership.startDate;
+    if (!effectiveStartDateInput) throw new ApiError(400, "Membership start date is required");
+
+    const { startDate, endDate, status } = buildMembershipWindow(effectiveStartDateInput, plan.duration);
+
+    const updatedMember = await User.findByIdAndUpdate(
+        memberId,
+        {
+            membership: {
+                planId,
+                startDate,
+                endDate,
+                status
+            }
+        },
+        { new: true, runValidators: true }
+    ).populate("membership.planId");
+
+    const { logActivity } = await import("../utils/activityLogger.js");
+    await logActivity({
+        actor: req.user._id,
+        action: "updated membership plan",
+        resourceType: "member",
+        resourceId: memberId,
+        metadata: {
+            planId,
+            startDate,
+            endDate,
+            status
+        }
+    });
+
+    return res.status(200).json(new ApiResponse(200, updatedMember, "Membership updated successfully"));
+});
+
+const removeAssignedMembershipPlan = asyncHandler(async (req, res) => {
+    const { memberId } = req.params;
+
+    const member = await User.findById(memberId);
+    if (!member) throw new ApiError(404, "User not found");
+
+    const updatedMember = await User.findByIdAndUpdate(
+        memberId,
+        {
+            membership: {
+                planId: null,
+                startDate: null,
+                endDate: null,
+                status: "inactive"
+            }
+        },
+        { new: true, runValidators: true }
+    ).populate("membership.planId");
+
+    const { logActivity } = await import("../utils/activityLogger.js");
+    await logActivity({
+        actor: req.user._id,
+        action: "removed membership plan",
+        resourceType: "member",
+        resourceId: memberId,
+        metadata: {}
+    });
+
+    return res.status(200).json(new ApiResponse(200, updatedMember, "Membership removed successfully"));
+});
+
 const adminDashboardStats = asyncHandler(async (req, res) => {
     const now = new Date();
     const soon = new Date();
@@ -495,6 +575,8 @@ export {
     resetPasswordAdmin,
     getSingleMemberById,
     assignMembershipPlan,
+    updateAssignedMembershipPlan,
+    removeAssignedMembershipPlan,
     adminDashboardStats,
     adminReports,
     createDietPlan,
