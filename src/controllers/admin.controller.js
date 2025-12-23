@@ -542,7 +542,7 @@ const getRecentActivities = asyncHandler(async (req, res) => {
 
     // Format as simple announcement-style entries
     const announcements = items.map((it) => {
-        const actorName = it.actor?.name || 'Admin';
+        const actorName =  'Admin';
         const actionText = it.action?.replace('.', ' ');
         const resType = it.resourceType;
         const resId = it.resourceId ? ` (${it.resourceId})` : '';
